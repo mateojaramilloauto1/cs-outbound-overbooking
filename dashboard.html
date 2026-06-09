@@ -2141,16 +2141,7 @@ function renderAptStackChart() {
     }));
   });
 
-  // Footer label below the grid tying all mini-charts together
   const names = groups.map(shortName);
-  if (multi) {
-    const footer = document.createElement('div');
-    footer.style.cssText = 'text-align:center;font-size:11px;letter-spacing:0.01em;opacity:0.75';
-    footer.innerHTML = 'Appointment Outcome — ' + names.map((n, i) =>
-      `<span style="color:${APT_GROUP_META[groups[i]].colour};font-weight:600">${n}</span>`
-    ).join('<span style="opacity:0.45"> · </span>');
-    container.appendChild(footer);
-  }
 
   // Rescheduled legend dot: single group color, or gradient across all selected group colors
   const reschedBg = multi
