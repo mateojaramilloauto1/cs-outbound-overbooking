@@ -86,6 +86,10 @@ h1{font-size:21px;font-weight:700;margin-bottom:3px}
 #mg-rba.active{background:#10B981!important;color:#fff!important;border-color:#10B981!important;opacity:1}
 #mg-amp.active{background:#F59E0B!important;color:#fff!important;border-color:#F59E0B!important;opacity:1}
 #mg-elabs.active{background:#8B5CF6!important;color:#fff!important;border-color:#8B5CF6!important;opacity:1}
+#ag-agent.active{background:#3B82F6!important;color:#fff!important;border-color:#3B82F6!important;opacity:1}
+#ag-rba.active{background:#10B981!important;color:#fff!important;border-color:#10B981!important;opacity:1}
+#ag-amp.active{background:#F59E0B!important;color:#fff!important;border-color:#F59E0B!important;opacity:1}
+#ag-elabs.active{background:#8B5CF6!important;color:#fff!important;border-color:#8B5CF6!important;opacity:1}
 .mt.stat-mode.active .sbd.pos{color:#6ee7b7!important}
 .mt.stat-mode.active .sbd.neg{color:#fca5a5!important}
 
@@ -236,13 +240,6 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
 <!-- TAB 2: Appointment Level KPIs -->
 <div class="tab-section" id="tab-call">
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:6px">
-    <div class="metric-row" style="margin-bottom:0">
-      <label>Groups</label>
-      <button class="mt apt-grp active" data-grp="Agent"              style="border-color:#3B82F6;color:#3B82F6" onclick="handleAptGroup('Agent')">Agent</button>
-      <button class="mt apt-grp active" data-grp="RBA test group"     style="border-color:#10B981;color:#10B981" onclick="handleAptGroup('RBA test group')">RBA</button>
-      <button class="mt apt-grp active" data-grp="11 Labs test group" style="border-color:#8B5CF6;color:#8B5CF6" onclick="handleAptGroup('11 Labs test group')">11 Labs</button>
-      <button class="mt apt-grp"        data-grp="AMP test group"     style="border-color:#F59E0B;color:#F59E0B" onclick="handleAptGroup('AMP test group')">AMP</button>
-    </div>
     <div class="trow" style="margin-bottom:0">
       <label>View</label>
       <button class="tg active" id="apt-pt-week"  onclick="setAptPeriodType('week')">By Week</button>
@@ -263,9 +260,12 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="26">Last 6 months</option>
       </select>
     </div>
-    <div class="trow" style="margin-bottom:0;margin-left:auto">
-      <button class="fb save-default-btn" id="save-default-apt" onclick="saveDefaultView('apt')" title="Save current mode, metric, group and range as default">💾 Save default view</button>
-      <span id="save-default-apt-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
+    <div class="metric-row" style="margin-bottom:0">
+      <label>Groups</label>
+      <button class="mt apt-grp active" id="ag-agent" data-grp="Agent"              style="border-color:#3B82F6;color:#3B82F6" onclick="handleAptGroup('Agent')">Agent</button>
+      <button class="mt apt-grp active" id="ag-rba"   data-grp="RBA test group"     style="border-color:#10B981;color:#10B981" onclick="handleAptGroup('RBA test group')">RBA</button>
+      <button class="mt apt-grp active" id="ag-elabs" data-grp="11 Labs test group" style="border-color:#8B5CF6;color:#8B5CF6" onclick="handleAptGroup('11 Labs test group')">11 Labs</button>
+      <button class="mt apt-grp"        id="ag-amp"   data-grp="AMP test group"     style="border-color:#F59E0B;color:#F59E0B" onclick="handleAptGroup('AMP test group')">AMP</button>
     </div>
   </div>
   <div class="metric-row" id="apt-metric-row">
@@ -274,16 +274,25 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <button class="fb apt-metric"        data-m="pct_cancelled"   onclick="setAptCompareMetric('pct_cancelled')">% Cancelled</button>
     <button class="fb apt-metric"        data-m="pct_unchanged"   onclick="setAptCompareMetric('pct_unchanged')">% Unchanged</button>
   </div>
+  <div class="trow" style="margin-bottom:0;margin-left:auto">
+    <button class="fb save-default-btn" id="save-default-apt" onclick="saveDefaultView('apt')" title="Save current metric, group and range as default">💾 Save default view</button>
+    <span id="save-default-apt-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
+  </div>
 
-  <!-- KPI summary cards -->
-  <div class="cards" id="apt-cards"></div>
-
-  <!-- Stacked area chart -->
+  <!-- Group comparison chart (mirrors Business KPIs trend chart) -->
   <div class="panel" style="margin-bottom:16px">
-    <h2 id="apt-chart-title">Appointment Outcome Distribution</h2>
-    <p class="psub" id="apt-chart-sub">% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · responds to Country filter</p>
+    <h2 id="apt-compare-title">Group Comparison</h2>
+    <p class="psub" id="apt-compare-sub">% metric per group over time · responds to Country filter</p>
+    <div class="cwrap h300"><canvas id="aptCompareChart"></canvas></div>
+    <div class="legend" id="aptCompareLegend"></div>
+  </div>
+
+  <!-- Outcome distribution chart (mirrors Business KPIs lead volume chart) -->
+  <div class="panel">
+    <h2 id="apt-stack-title">Appointment Outcome Distribution</h2>
+    <p class="psub" id="apt-stack-sub">% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · responds to Country filter</p>
     <div class="legend" id="aptStackLegend"></div>
-    <div class="cwrap h460"><canvas id="aptStackChart"></canvas></div>
+    <div class="cwrap h260"><canvas id="aptStackChart"></canvas></div>
   </div>
 </div>
 
@@ -2036,7 +2045,8 @@ function freshAptCanvas() {
 }
 
 function renderAptStackChart() {
-  const ctx = freshAptCanvas();
+  if (charts.aptStack) { charts.aptStack.destroy(); charts.aptStack = null; }
+  const ctx = document.getElementById('aptStackChart').getContext('2d');
   const c   = selCountry;
   const src = aptSelGroup;
   const periods = getAptPeriods();
@@ -2107,9 +2117,9 @@ function renderAptStackChart() {
     }
   });
 
-  document.getElementById('apt-chart-title').textContent =
+  document.getElementById('apt-stack-title').textContent =
     `Appointment Outcome — ${src}`;
-  document.getElementById('apt-chart-sub').textContent =
+  document.getElementById('apt-stack-sub').textContent =
     `% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · ${c==='ALL'?'All countries':c} · ${aptPeriodType==='week'?'By week':'By phase'}`;
   document.getElementById('aptStackLegend').innerHTML = [
     {c:'rgba(239,68,68,0.85)',     n:'% Cancelled'},
@@ -2119,7 +2129,8 @@ function renderAptStackChart() {
 }
 
 function renderAptCompareChart() {
-  const ctx     = freshAptCanvas();
+  if (charts.aptCompare) { charts.aptCompare.destroy(); charts.aptCompare = null; }
+  const ctx     = document.getElementById('aptCompareChart').getContext('2d');
   const c       = selCountry;
   const periods = getAptPeriods();
   const groups  = APT_GROUP_KEYS.filter(g => aptCompareGroups.has(g));
@@ -2201,7 +2212,7 @@ function renderAptCompareChart() {
     }
   };
 
-  charts.aptStack = new Chart(ctx, {
+  charts.aptCompare = new Chart(ctx, {
     type: 'line',
     plugins: [labelPlugin],
     data: { labels: periods, datasets },
@@ -2228,15 +2239,13 @@ function renderAptCompareChart() {
     }
   });
 
-  document.getElementById('apt-chart-title').textContent = `Group Comparison — ${metricLabel}`;
-  document.getElementById('apt-chart-sub').textContent =
+  document.getElementById('apt-compare-title').textContent = `Group Comparison — ${metricLabel}`;
+  document.getElementById('apt-compare-sub').textContent =
     `${metricLabel} per group · ${c==='ALL'?'All countries':c} · ${aptPeriodType==='week'?'By week':'By phase'}`;
-  document.getElementById('aptStackLegend').innerHTML = groups.map(src => {
+  document.getElementById('aptCompareLegend').innerHTML = groups.map(src => {
     const meta = APT_GROUP_META[src];
     return `<div class="li"><div class="ld" style="background:${meta.colour}"></div>${src}</div>`;
   }).join('');
-
-  renderAptGroupBtnStats();
 }
 
 function renderAptGroupBtnStats() {
@@ -2272,55 +2281,28 @@ function renderAptGroupBtnStats() {
 }
 
 function renderAptTab() {
-  if (aptMode === 'compare') {
-    document.getElementById('apt-cards').style.display = 'none';
-    renderAptGroupBtnStats();
-    renderAptCompareChart();
-  } else {
-    document.getElementById('apt-cards').style.display = '';
-    renderAptGroupBtnStats();
-    renderAptCards();
-    renderAptStackChart();
-  }
+  renderAptCompareChart();
+  renderAptStackChart();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // APT KPI CONTROLS
 // ═══════════════════════════════════════════════════════════════════════════
 function setAptMode(m) {
-  aptMode = m;
-  document.getElementById('apt-metric-row').style.display = m==='compare' ? '' : 'none';
-  if (m==='compare') {
-    document.querySelectorAll('.apt-grp').forEach(b =>
-      b.classList.toggle('active', aptCompareGroups.has(b.dataset.grp))
-    );
-  } else {
-    document.querySelectorAll('.apt-grp').forEach(b =>
-      b.classList.toggle('active', b.dataset.grp===aptSelGroup)
-    );
-  }
+  // mode is always compare; kept for localStorage backwards-compatibility
   renderAptTab();
 }
 
 function handleAptGroup(src) {
-  if (aptMode==='compare') {
-    if (aptCompareGroups.has(src)) {
-      if (aptCompareGroups.size > 1) aptCompareGroups.delete(src);
-    } else {
-      aptCompareGroups.add(src);
-    }
-    document.querySelectorAll('.apt-grp').forEach(b =>
-      b.classList.toggle('active', aptCompareGroups.has(b.dataset.grp))
-    );
-    renderAptGroupBtnStats();
-    renderAptCompareChart();
+  if (aptCompareGroups.has(src)) {
+    if (aptCompareGroups.size > 1) aptCompareGroups.delete(src);
   } else {
-    aptSelGroup = src;
-    document.querySelectorAll('.apt-grp').forEach(b =>
-      b.classList.toggle('active', b.dataset.grp===src)
-    );
-    renderAptStackChart();
+    aptCompareGroups.add(src);
   }
+  document.querySelectorAll('.apt-grp').forEach(b =>
+    b.classList.toggle('active', aptCompareGroups.has(b.dataset.grp))
+  );
+  renderAptTab();
 }
 
 function setAptCompareMetric(metric) {
@@ -2328,7 +2310,6 @@ function setAptCompareMetric(metric) {
   document.querySelectorAll('.apt-metric').forEach(b =>
     b.classList.toggle('active', b.dataset.m===metric)
   );
-  renderAptGroupBtnStats();
   renderAptCompareChart();
 }
 
@@ -2398,17 +2379,14 @@ function loadDefaults(){
       b.classList.toggle('on',selMetrics.has(b.id.replace('mt-',''))); }); }
 
   // Appointment Level KPIs
-  if(snap.aptMode!=null){ aptMode=snap.aptMode;
-    document.getElementById('apt-metric-row').style.display=aptMode==='compare'?'':'none'; }
   if(snap.aptPeriodType!=null){ aptPeriodType=snap.aptPeriodType;
     document.getElementById('apt-pt-week') .classList.toggle('active',aptPeriodType==='week');
     document.getElementById('apt-pt-phase').classList.toggle('active',aptPeriodType==='phase');
     document.getElementById('apt-week-row').style.display=aptPeriodType==='week'?'':'none'; }
   if(snap.aptSelGroup){ aptSelGroup=snap.aptSelGroup; }
   if(snap.aptCompareGroups){ aptCompareGroups=new Set(snap.aptCompareGroups);
-    document.querySelectorAll('.apt-grp').forEach(b=>{
-      const sel=aptMode==='compare'?aptCompareGroups.has(b.dataset.grp):b.dataset.grp===aptSelGroup;
-      b.classList.toggle('active',sel); }); }
+    document.querySelectorAll('.apt-grp').forEach(b=>
+      b.classList.toggle('active', aptCompareGroups.has(b.dataset.grp))); }
   if(snap.aptCompareMetric){ aptCompareMetric=snap.aptCompareMetric;
     document.querySelectorAll('.apt-metric').forEach(b=>b.classList.toggle('active',b.dataset.m===aptCompareMetric)); }
   if(snap.aptWeekWindow!=null){ aptWeekWindow=snap.aptWeekWindow;
