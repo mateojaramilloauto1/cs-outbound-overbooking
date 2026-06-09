@@ -235,30 +235,20 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
 
 <!-- TAB 2: Appointment Level KPIs -->
 <div class="tab-section" id="tab-call">
-  <div class="filter-bar" style="margin-bottom:10px">
-    <!-- Group selector -->
-    <div class="filter-row" id="apt-grp-row" style="margin-bottom:6px">
-      <label>Group</label>
-      <button class="fb apt-grp active" data-grp="Agent"              onclick="handleAptGroup('Agent')">Agent</button>
-      <button class="fb apt-grp"        data-grp="RBA test group"     onclick="handleAptGroup('RBA test group')">RBA test group</button>
-      <button class="fb apt-grp"        data-grp="AMP test group"     onclick="handleAptGroup('AMP test group')">AMP test group</button>
-      <button class="fb apt-grp"        data-grp="11 Labs test group" onclick="handleAptGroup('11 Labs test group')">11 Labs test group</button>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:6px">
+    <div class="metric-row" style="margin-bottom:0">
+      <label>Groups</label>
+      <button class="mt apt-grp active" data-grp="Agent"              style="border-color:#3B82F6;color:#3B82F6" onclick="handleAptGroup('Agent')">Agent</button>
+      <button class="mt apt-grp active" data-grp="RBA test group"     style="border-color:#10B981;color:#10B981" onclick="handleAptGroup('RBA test group')">RBA</button>
+      <button class="mt apt-grp active" data-grp="11 Labs test group" style="border-color:#8B5CF6;color:#8B5CF6" onclick="handleAptGroup('11 Labs test group')">11 Labs</button>
+      <button class="mt apt-grp"        data-grp="AMP test group"     style="border-color:#F59E0B;color:#F59E0B" onclick="handleAptGroup('AMP test group')">AMP</button>
     </div>
-    <!-- Metric selector (compare mode only) -->
-    <div class="filter-row" id="apt-metric-row" style="margin-bottom:6px">
-      <label>Metric</label>
-      <button class="fb apt-metric active" data-m="pct_rescheduled" onclick="setAptCompareMetric('pct_rescheduled')">% Rescheduled</button>
-      <button class="fb apt-metric"        data-m="pct_cancelled"   onclick="setAptCompareMetric('pct_cancelled')">% Cancelled</button>
-      <button class="fb apt-metric"        data-m="pct_unchanged"   onclick="setAptCompareMetric('pct_unchanged')">% Unchanged</button>
-    </div>
-    <!-- Period type toggle -->
-    <div class="filter-row" style="margin-bottom:6px">
+    <div class="trow" style="margin-bottom:0">
       <label>View</label>
-      <button class="fb apt-pt active" id="apt-pt-week"  onclick="setAptPeriodType('week')">By Week</button>
-      <button class="fb apt-pt"        id="apt-pt-phase" onclick="setAptPeriodType('phase')">By Phase</button>
+      <button class="tg active" id="apt-pt-week"  onclick="setAptPeriodType('week')">By Week</button>
+      <button class="tg"        id="apt-pt-phase" onclick="setAptPeriodType('phase')">By Phase</button>
     </div>
-    <!-- Last-N-weeks window (week view only) -->
-    <div class="filter-row" id="apt-week-row" style="margin-bottom:0">
+    <div class="trow" id="apt-week-row" style="margin-bottom:0">
       <label>Range</label>
       <select class="wrange-sel" id="apt-ww-sel" onchange="setAptWeekWindow(+this.value)">
         <option value="0" selected>All</option>
@@ -273,10 +263,16 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="26">Last 6 months</option>
       </select>
     </div>
-    <div class="filter-row" style="margin-bottom:0;margin-top:2px">
+    <div class="trow" style="margin-bottom:0;margin-left:auto">
       <button class="fb save-default-btn" id="save-default-apt" onclick="saveDefaultView('apt')" title="Save current mode, metric, group and range as default">💾 Save default view</button>
       <span id="save-default-apt-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
     </div>
+  </div>
+  <div class="metric-row" id="apt-metric-row">
+    <label>Metric</label>
+    <button class="fb apt-metric active" data-m="pct_rescheduled" onclick="setAptCompareMetric('pct_rescheduled')">% Rescheduled</button>
+    <button class="fb apt-metric"        data-m="pct_cancelled"   onclick="setAptCompareMetric('pct_cancelled')">% Cancelled</button>
+    <button class="fb apt-metric"        data-m="pct_unchanged"   onclick="setAptCompareMetric('pct_unchanged')">% Unchanged</button>
   </div>
 
   <!-- KPI summary cards -->
@@ -1875,7 +1871,7 @@ var APPT_RAW=[["AMP & Agent","ALL","week","W01",26,12,12,2,null],["AMP & Agent",
 let aptPeriodType    = 'week';
 let aptSelGroup      = 'Agent';
 let aptMode          = 'compare';
-let aptCompareGroups = new Set(['Agent','RBA test group']);
+let aptCompareGroups = new Set(['Agent','RBA test group','11 Labs test group']);
 let aptCompareMetric = 'pct_rescheduled';
 let aptWeekWindow    = 0;  // 0 = all weeks; 4/8/12 = last N weeks
 
