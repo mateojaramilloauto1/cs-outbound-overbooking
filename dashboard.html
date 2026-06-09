@@ -2068,18 +2068,9 @@ function renderAptStackChart() {
 
   const showLabels = ctx =>
     (aptPeriodType==='phase') || (ctx.dataIndex % Math.max(1, Math.floor(labels.length/5)) === 0);
-  const lastOf = arr => { for(let i=arr.length-1;i>=0;i--){if(arr[i]!=null)return i;} return -1; };
-  const endLbl = (name, color, arr) => ({
-    display: ctx => ctx.dataIndex === lastOf(arr),
-    anchor:'end', align:'right', clip:false,
-    color, font:{size:12,weight:'700'}, formatter:()=>name, padding:{left:8}
-  });
-  const dlUnc  = [{display:showLabels,anchor:'center',align:'center',color:'#334155',font:{size:11,weight:'700'},formatter:(v)=>v>=4?v.toFixed(0)+'%':null},
-                  endLbl('Unchanged','rgba(100,116,139,0.9)',pUnc)];
-  const dlRes  = [{display:showLabels,anchor:'center',align:'center',color:'#fff',   font:{size:11,weight:'700'},formatter:(v)=>v>=4?v.toFixed(0)+'%':null},
-                  endLbl('Rescheduled',meta.colour,pRes)];
-  const dlCan  = [{display:showLabels,anchor:'center',align:'center',color:'#fff',   font:{size:11,weight:'700'},formatter:(v)=>v>=4?v.toFixed(0)+'%':null},
-                  endLbl('Cancelled','rgba(239,68,68,0.9)',pCan)];
+  const dlUnc = {display:showLabels, anchor:'center', align:'center', color:'#334155', font:{size:11,weight:'700'}, formatter:(v)=>v>=4?v.toFixed(0)+'%':null};
+  const dlRes = {display:showLabels, anchor:'center', align:'center', color:'#fff',    font:{size:11,weight:'700'}, formatter:(v)=>v>=4?v.toFixed(0)+'%':null};
+  const dlCan = {display:showLabels, anchor:'center', align:'center', color:'#fff',    font:{size:11,weight:'700'}, formatter:(v)=>v>=4?v.toFixed(0)+'%':null};
 
   charts.aptStack = new Chart(ctx, {
     type: 'line',
@@ -2104,7 +2095,6 @@ function renderAptStackChart() {
     options: {
       responsive:true, maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      layout:{padding:{right:90}},
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{
