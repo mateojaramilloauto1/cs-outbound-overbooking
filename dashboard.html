@@ -6,3 +6,337 @@
 <title>Outbound Overbooking KPI Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;font-size:15px;padding:18px 22px;background:#fff;color:#1e293b}
+h1{font-size:21px;font-weight:700;margin-bottom:3px}
+.subtitle{font-size:13px;color:#94a3b8;margin-bottom:12px}
+
+/* Filters */
+.filter-bar{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:10px}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.filter-row:last-child{margin-bottom:0}
+.filter-row label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;min-width:52px}
+.fb{padding:5px 14px;border-radius:14px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:13px;font-family:inherit;color:#475569;transition:all .12s}
+.fb.active{background:#1e293b;color:#fff;border-color:#1e293b}
+.fb:hover:not(.active){background:#f1f5f9}
+.fb-country{padding:9px 20px;font-size:15px;border-radius:18px;font-weight:600}
+.fb-country img.emoji{height:1.1em;width:1.1em;vertical-align:-0.15em;margin-right:4px}
+
+/* Phase legend */
+.phase-legend{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.pl{font-size:12px;padding:3px 8px;border-radius:10px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+.pl strong{font-weight:600}
+
+/* Warning */
+.warning{background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:6px 11px;font-size:13px;margin-bottom:10px;display:none}
+
+/* Main nav */
+.main-tabs{display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:16px}
+.main-tab{padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;color:#64748b;transition:all .12s;background:#fff}
+.main-tab.active{color:#1e293b;border-bottom-color:#3B82F6}
+.main-tab:hover:not(.active){color:#1e293b;background:#f8fafc}
+.tab-section{display:none}
+.tab-section.active{display:block}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:16px}
+.card{background:#f8fafc;border-radius:8px;padding:11px 13px;border:1px solid #e2e8f0}
+.card-label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.card-value{font-size:22px;font-weight:700;line-height:1.1;color:#1e293b}
+.card-sub{font-size:13px;color:#94a3b8;margin-top:3px}
+.ac{border-left:3px solid #3B82F6}
+.rc{border-left:3px solid #10B981}
+.mc{border-left:3px solid #F59E0B}
+.dc{border-left:3px solid #8B5CF6}
+.pos{color:#10B981}.neg{color:#EF4444}
+
+/* Panels */
+.panel{background:#fff;border-radius:8px;padding:13px;border:1px solid #e2e8f0}
+.panel h2{font-size:15px;font-weight:600;margin-bottom:2px}
+.panel .psub{font-size:12px;color:#94a3b8;margin-bottom:10px}
+.row2{display:grid;grid-template-columns:2fr 1fr;gap:13px;margin-bottom:16px}
+.row1{margin-bottom:16px}
+.cwrap{position:relative}
+.h260{height:260px}.h220{height:220px}.h300{height:300px}.h460{height:460px}.h520{height:520px}
+.apt-grp.stat-mode{padding:10px 16px;text-align:center;line-height:1;min-width:130px}
+.apt-grp.stat-mode .sbn{display:block;font-size:14px;font-weight:600;opacity:.85;margin-bottom:5px}
+.apt-grp.stat-mode .sbv{display:block;font-size:26px;font-weight:700;line-height:1.1}
+.apt-grp.stat-mode .sbd{display:block;font-size:12px;font-weight:700;margin-top:4px}
+.apt-grp.stat-mode .sbd.pos{color:#10B981}.apt-grp.stat-mode .sbd.neg{color:#EF4444}
+.apt-grp.stat-mode .sbd.ref{font-weight:400;opacity:.55}
+.apt-grp.stat-mode.active .sbd.pos{color:#6ee7b7}.apt-grp.stat-mode.active .sbd.neg{color:#fca5a5}
+.apt-grp.stat-mode .sba{display:block;font-size:13px;font-weight:600;opacity:.75;margin-top:4px}
+
+/* Metric toggles */
+.metric-row{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.metric-row label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;min-width:80px}
+.mt{padding:5px 11px;border-radius:12px;border:1.5px solid;background:#fff;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;opacity:.4;transition:all .12s}
+.mt.on{opacity:1;background:#f8fafc}
+.mt.stat-mode{padding:10px 16px;border-radius:8px;text-align:center;line-height:1;min-width:120px;opacity:1}
+.mt.stat-mode .sbn{display:block;font-size:14px;font-weight:600;opacity:.85;margin-bottom:5px}
+.mt.stat-mode .sbv{display:block;font-size:26px;font-weight:700;line-height:1.1}
+.mt.stat-mode .sbd{display:block;font-size:12px;font-weight:700;margin-top:4px}
+.mt.stat-mode .sbd.pos{color:#10B981}.mt.stat-mode .sbd.neg{color:#EF4444}
+.mt.stat-mode .sbd.ref{font-weight:400;opacity:.55}
+.mt.stat-mode.on .sbd.pos{color:#6ee7b7}.mt.stat-mode.on .sbd.neg{color:#fca5a5}
+.mt.stat-mode .sba{display:block;font-size:13px;font-weight:600;opacity:.75;margin-top:4px}
+.mt.active{background:#1e293b!important;color:#fff!important;border-color:#1e293b!important;opacity:1}
+#mg-agent.active{background:#3B82F6!important;color:#fff!important;border-color:#3B82F6!important;opacity:1}
+#mg-rba.active{background:#10B981!important;color:#fff!important;border-color:#10B981!important;opacity:1}
+#mg-amp.active{background:#F59E0B!important;color:#fff!important;border-color:#F59E0B!important;opacity:1}
+#mg-elabs.active{background:#8B5CF6!important;color:#fff!important;border-color:#8B5CF6!important;opacity:1}
+.mt.stat-mode.active .sbd.pos{color:#6ee7b7!important}
+.mt.stat-mode.active .sbd.neg{color:#fca5a5!important}
+
+/* Toggle */
+.trow{display:flex;gap:6px;align-items:center;margin-bottom:10px}
+.trow label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-right:4px}
+.tg{padding:6px 16px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#64748b;transition:all .12s}
+.tg.active{background:#1e293b;color:#fff;border-color:#1e293b}
+
+/* Legend */
+.legend{display:flex;gap:14px;margin-top:10px;justify-content:center;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:6px;font-size:14px;color:#475569;font-weight:500}
+.ld{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+
+/* Data Table */
+.tpanel{background:#fff;border-radius:8px;border:1px solid #e2e8f0}
+.sub-tabs{display:flex;border-bottom:1px solid #e2e8f0;padding:0 14px}
+.sub-tab{padding:10px 17px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:#64748b;transition:all .12s}
+.sub-tab.active{color:#1e293b;border-bottom-color:#3B82F6}
+.tcontent{padding:14px;overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:600;color:#64748b;text-align:right;padding:5px 7px;border-bottom:2px solid #e2e8f0;white-space:nowrap;background:#f8fafc;position:sticky;top:0;z-index:1}
+th:first-child,th:nth-child(2){text-align:left}
+td{font-size:12px;padding:4px 7px;text-align:right;border-bottom:1px solid #f1f5f9;white-space:nowrap;color:#1e293b}
+td:first-child{text-align:left;font-weight:500;width:6px;padding-right:0}
+td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;white-space:nowrap}
+.hl td{background:#f0fdf4}
+.dp{color:#10B981}.dn{color:#EF4444}
+.aval{color:#2563eb;font-weight:500}
+.rval{color:#059669;font-weight:500}
+.mval{color:#d97706;font-weight:500}
+.group-head td{background:#e8edf4;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;padding:4px 7px;border-bottom:1px solid #cbd5e1}
+.ph-note{font-size:12px;color:#94a3b8;margin-top:6px;font-style:italic}
+.tcontent{max-height:520px;overflow:auto}
+/* Appointment KPI table */
+.apt-table{width:100%;border-collapse:collapse;font-size:12px}
+.apt-table th{font-size:11px;font-weight:600;color:#64748b;text-align:right;padding:5px 8px;border-bottom:2px solid #e2e8f0;white-space:nowrap;background:#f8fafc;position:sticky;top:0;z-index:1}
+.apt-table th:first-child,.apt-table th:nth-child(2){text-align:left}
+.apt-table td{padding:4px 8px;text-align:right;border-bottom:1px solid #f1f5f9;white-space:nowrap;color:#1e293b;font-size:12px}
+.apt-table td:first-child{text-align:left;padding-right:0;width:8px}
+.apt-table td:nth-child(2){text-align:left;white-space:nowrap}
+.apt-table .grp-head td{background:#1e293b;color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:5px 8px;border-bottom:none}
+.apt-table .grp-head td:nth-child(2){padding-left:8px}
+.apt-table .sub-row td:nth-child(2){padding-left:20px;color:#64748b;font-style:italic}
+.apt-table .hl-resched{color:#7C3AED;font-weight:700}
+.apt-table .hl-via{color:#0284C7;font-weight:700}
+.apt-table .kpi-resched td{background:#f5f3ff}
+.apt-table .kpi-via td{background:#f0f9ff}
+.apt-table tr:hover td{background:#f8fafc}
+.apt-table .kpi-resched:hover td{background:#ede9fe}
+.apt-table .kpi-via:hover td{background:#e0f2fe}
+.apt-period-btn.active{background:#1e293b;color:#fff;border-color:#1e293b}
+.h400{height:400px}
+.wrange-sel{padding:5px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-size:13px;font-family:inherit;color:#475569;cursor:pointer;outline:none}
+.wrange-sel:focus{border-color:#94a3b8}
+.save-default-btn{border-style:dashed;opacity:.7;font-size:12px;padding:4px 12px}
+.save-default-btn:hover{opacity:1;border-color:#64748b;color:#1e293b}
+</style>
+</head>
+<body>
+
+<h1>Outbound Overbooking KPI Dashboard</h1>
+<p class="subtitle">Agent (control) · RBA test group (incl. Agent follow-ups) · AMP test group (incl. Agent follow-ups)</p>
+
+<div class="filter-bar">
+  <div class="filter-row" id="country-row">
+    <label>Country</label>
+    <button class="fb fb-country active" data-c="DE" onclick="setC('DE')"><img class="emoji" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f1e9-1f1ea.svg" alt="🇩🇪"> DE</button>
+    <button class="fb fb-country" data-c="FR" onclick="setC('FR')"><img class="emoji" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f1eb-1f1f7.svg" alt="🇫🇷"> FR</button>
+    <button class="fb fb-country" data-c="IT" onclick="setC('IT')"><img class="emoji" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f1ee-1f1f9.svg" alt="🇮🇹"> IT</button>
+    <button class="fb fb-country" data-c="ES" onclick="setC('ES')"><img class="emoji" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f1ea-1f1f8.svg" alt="🇪🇸"> ES</button>
+  </div>
+</div>
+
+<div class="warning" id="warning"></div>
+
+<div class="main-tabs">
+  <div class="main-tab active" onclick="setMainTab('appt')">Business KPIs</div>
+  <div class="main-tab" onclick="setMainTab('call')">Appointment Level KPIs</div>
+  <div class="main-tab" onclick="setMainTab('fyi')">Glossary</div>
+</div>
+
+<!-- TAB 1: Business KPIs -->
+<div class="tab-section active" id="tab-appt">
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:6px">
+    <div class="trow" style="margin-bottom:0">
+      <label>View</label>
+      <button class="tg active" id="tv-weekly" onclick="setTrendView('weekly')">Weekly</button>
+      <button class="tg"        id="tv-phase"  onclick="setTrendView('phase')">By Phase</button>
+    </div>
+    <div class="trow" id="trend-week-range-row" style="margin-bottom:0">
+      <label>Range</label>
+      <select class="wrange-sel" id="trend-ww-sel" onchange="setTrendWeekWindow(+this.value)">
+        <option value="0" selected>All</option>
+        <option value="2">Last 2W</option>
+        <option value="3">Last 3W</option>
+        <option value="4">Last 4W</option>
+        <option value="5">Last 5W</option>
+        <option value="6">Last 6W</option>
+        <option value="8">Last 8W</option>
+        <option value="10">Last 10W</option>
+        <option value="13">Last 3 months</option>
+        <option value="26">Last 6 months</option>
+      </select>
+    </div>
+    <div class="metric-row" style="margin-bottom:0">
+      <label>Groups</label>
+      <button class="mt active" id="mg-agent" style="border-color:#3B82F6;color:#3B82F6" onclick="toggleG('agent')">Agent</button>
+      <button class="mt active" id="mg-rba"   style="border-color:#10B981;color:#10B981" onclick="toggleG('rba')">RBA</button>
+      <button class="mt active" id="mg-amp"   style="border-color:#F59E0B;color:#F59E0B" onclick="toggleG('amp')">AMP</button>
+      <button class="mt active" id="mg-elabs" style="border-color:#8B5CF6;color:#8B5CF6" onclick="toggleG('elabs')">11 Labs</button>
+    </div>
+  </div>
+  <div class="metric-row" id="trend-compare-metric-row">
+    <label>Metric</label>
+    <button class="fb apt-metric active" data-tm="purchase"   onclick="setTrendCompareMetric('purchase')">% OB→Purchase</button>
+    <button class="fb apt-metric"        data-tm="reschedule" onclick="setTrendCompareMetric('reschedule')">% OB→Reschedule</button>
+    <button class="fb apt-metric"        data-tm="obshow"     onclick="setTrendCompareMetric('obshow')">% OB→Show</button>
+    <button class="fb apt-metric"        data-tm="revenue"    onclick="setTrendCompareMetric('revenue')">Revenue €</button>
+    <button class="fb apt-metric"        data-tm="cost"       onclick="setTrendCompareMetric('cost')">Cost €</button>
+  </div>
+  <div class="metric-row" id="trend-multi-metric-row" style="display:none">
+    <label>Chart metrics</label>
+    <button class="mt on" id="mt-purchase"   style="border-color:#3B82F6;color:#3B82F6" onclick="toggleM('purchase')">% OB→Purchase</button>
+    <button class="mt"    id="mt-reschedule" style="border-color:#7C3AED;color:#7C3AED" onclick="toggleM('reschedule')">% OB→Reschedule</button>
+    <button class="mt"    id="mt-obshow"     style="border-color:#DB2777;color:#DB2777" onclick="toggleM('obshow')">% OB→Show</button>
+    <button class="mt"    id="mt-revenue"    style="border-color:#059669;color:#059669" onclick="toggleM('revenue')">Revenue €</button>
+    <button class="mt"    id="mt-cost"       style="border-color:#EF4444;color:#EF4444" onclick="toggleM('cost')">Cost €</button>
+  </div>
+  <div class="trow" style="margin-bottom:0;margin-left:auto">
+    <button class="fb save-default-btn" id="save-default-biz" onclick="saveDefaultView('biz')" title="Save current view, mode, metric and group selections as default">💾 Save default view</button>
+    <span id="save-default-biz-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
+  </div>
+  <div class="panel" style="margin-bottom:16px">
+    <h2 id="trend-chart-title">Weekly Trend</h2>
+    <p class="psub" id="trend-chart-sub">% metrics → left axis · Revenue/Cost → right axis (€) · Source: <a href="https://docs.google.com/spreadsheets/d/14E9gQqcoLoQwKTNm-Qi4naB851P0zsyebz6CgSpBT9k" target="_blank" style="color:#3B82F6;text-decoration:none">Leads KPIs sheet</a></p>
+    <div class="cwrap h520"><canvas id="trendChart"></canvas></div>
+    <div class="legend" id="trendLegend"></div>
+  </div>
+  <div class="panel">
+    <h2>Lead Volume by Group</h2>
+    <p class="psub">Lead volume per group over time</p>
+    <div class="legend" id="stackedLegend"></div>
+    <div class="cwrap h260"><canvas id="stackedAreaChart"></canvas></div>
+  </div>
+</div>
+
+<!-- TAB 2: Appointment Level KPIs -->
+<div class="tab-section" id="tab-call">
+  <div class="filter-bar" style="margin-bottom:10px">
+    <!-- Group selector -->
+    <div class="filter-row" id="apt-grp-row" style="margin-bottom:6px">
+      <label>Group</label>
+      <button class="fb apt-grp active" data-grp="Agent"              onclick="handleAptGroup('Agent')">Agent</button>
+      <button class="fb apt-grp"        data-grp="RBA test group"     onclick="handleAptGroup('RBA test group')">RBA test group</button>
+      <button class="fb apt-grp"        data-grp="AMP test group"     onclick="handleAptGroup('AMP test group')">AMP test group</button>
+      <button class="fb apt-grp"        data-grp="11 Labs test group" onclick="handleAptGroup('11 Labs test group')">11 Labs test group</button>
+    </div>
+    <!-- Metric selector (compare mode only) -->
+    <div class="filter-row" id="apt-metric-row" style="margin-bottom:6px">
+      <label>Metric</label>
+      <button class="fb apt-metric active" data-m="pct_rescheduled" onclick="setAptCompareMetric('pct_rescheduled')">% Rescheduled</button>
+      <button class="fb apt-metric"        data-m="pct_cancelled"   onclick="setAptCompareMetric('pct_cancelled')">% Cancelled</button>
+      <button class="fb apt-metric"        data-m="pct_unchanged"   onclick="setAptCompareMetric('pct_unchanged')">% Unchanged</button>
+    </div>
+    <!-- Period type toggle -->
+    <div class="filter-row" style="margin-bottom:6px">
+      <label>View</label>
+      <button class="fb apt-pt active" id="apt-pt-week"  onclick="setAptPeriodType('week')">By Week</button>
+      <button class="fb apt-pt"        id="apt-pt-phase" onclick="setAptPeriodType('phase')">By Phase</button>
+    </div>
+    <!-- Last-N-weeks window (week view only) -->
+    <div class="filter-row" id="apt-week-row" style="margin-bottom:0">
+      <label>Range</label>
+      <select class="wrange-sel" id="apt-ww-sel" onchange="setAptWeekWindow(+this.value)">
+        <option value="0" selected>All</option>
+        <option value="2">Last 2W</option>
+        <option value="3">Last 3W</option>
+        <option value="4">Last 4W</option>
+        <option value="5">Last 5W</option>
+        <option value="6">Last 6W</option>
+        <option value="8">Last 8W</option>
+        <option value="10">Last 10W</option>
+        <option value="13">Last 3 months</option>
+        <option value="26">Last 6 months</option>
+      </select>
+    </div>
+    <div class="filter-row" style="margin-bottom:0;margin-top:2px">
+      <button class="fb save-default-btn" id="save-default-apt" onclick="saveDefaultView('apt')" title="Save current mode, metric, group and range as default">💾 Save default view</button>
+      <span id="save-default-apt-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
+    </div>
+  </div>
+
+  <!-- KPI summary cards -->
+  <div class="cards" id="apt-cards"></div>
+
+  <!-- Stacked area chart -->
+  <div class="panel" style="margin-bottom:16px">
+    <h2 id="apt-chart-title">Appointment Outcome Distribution</h2>
+    <p class="psub" id="apt-chart-sub">% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · responds to Country filter</p>
+    <div class="legend" id="aptStackLegend"></div>
+    <div class="cwrap h460"><canvas id="aptStackChart"></canvas></div>
+  </div>
+</div>
+
+<!-- TAB 3: Glossary -->
+<div class="tab-section" id="tab-fyi">
+  <div class="panel" style="max-width:680px">
+    <h2>Phase Definitions</h2>
+    <p class="psub">Date ranges used across all tabs</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:14px">
+      <thead>
+        <tr style="border-bottom:2px solid #e2e8f0">
+          <th style="text-align:left;padding:8px 12px;font-weight:700;color:#64748b">Phase</th>
+          <th style="text-align:left;padding:8px 12px;font-weight:700;color:#64748b">Date Range</th>
+          <th style="text-align:left;padding:8px 12px;font-weight:700;color:#64748b">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600">Phase 1</td><td style="padding:8px 12px">Nov 28 – Dec 18</td><td style="padding:8px 12px;color:#94a3b8">W48–W51</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600">Phase 2</td><td style="padding:8px 12px">Dec 19 – Jan 14</td><td style="padding:8px 12px;color:#94a3b8">W52–W03</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600">Phase x</td><td style="padding:8px 12px">Jan 15 – Jan 19</td><td style="padding:8px 12px;color:#94a3b8">Transition week</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600">Phase 3</td><td style="padding:8px 12px">Jan 20 – Mar 31</td><td style="padding:8px 12px;color:#94a3b8">W04–W13</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600;padding-left:24px">↳ 3.1</td><td style="padding:8px 12px">Jan 20 – Feb 1</td><td style="padding:8px 12px;color:#94a3b8">W4–W6</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600;padding-left:24px">↳ 3.2</td><td style="padding:8px 12px">Feb 2 – Mar 2</td><td style="padding:8px 12px;color:#94a3b8">W6–W10</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:8px 12px;font-weight:600;padding-left:24px">↳ 3.3</td><td style="padding:8px 12px">Mar 2 – Mar 31</td><td style="padding:8px 12px;color:#94a3b8">W10+</td></tr>
+        <tr><td style="padding:8px 12px;font-weight:600">Phase 4</td><td style="padding:8px 12px">Mar 31 onwards</td><td style="padding:8px 12px;color:#94a3b8">W14+</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:20px;padding:12px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+      <p style="font-size:13px;font-weight:700;margin-bottom:6px;color:#475569">Groups</p>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+        <div><span style="display:inline-block;width:12px;height:12px;background:#3B82F6;border-radius:2px;margin-right:6px;vertical-align:middle"></span><strong>Agent</strong> — Control group, handled by human agents</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#10B981;border-radius:2px;margin-right:6px;vertical-align:middle"></span><strong>RBA test group</strong> — AI voice agent (RBA), with Agent follow-ups</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#F59E0B;border-radius:2px;margin-right:6px;vertical-align:middle"></span><strong>AMP test group</strong> — AI voice agent (AMP), with Agent follow-ups</div>
+        <div><span style="display:inline-block;width:12px;height:12px;background:#8B5CF6;border-radius:2px;margin-right:6px;vertical-align:middle"></span><strong>11 Labs test group</strong> — AI voice agent (11 Labs), with Agent follow-ups</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA — truncated for brevity in this push; full data in source file
+// ═══════════════════════════════════════════════════════════════════════════
+const WEEKS=['W48','W49','W50','W51','W52','W01','W02','W03','W04','W05',
+             'W06','W07','W08','W09','W10','W11','W12','W13','W14','W15',
+             'W16','W17','W18','W19','W20','W21','W22','W23'];
+const PHASE_LABELS={total:'All',p1:'Phase 1',p2:'Phase 2',px:'Phase x',
+  p3:'Phase 3',p31:'Phase 3.1',p32:'Phase 3.2',p33:'Phase 3.3',p4:'Phase 4'};
+const PK_ORDER=['total','p1','p2','px','p3','p31','p32','p33','p4'];
+</script>
+</body>
+</html>
