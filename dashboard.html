@@ -295,7 +295,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
       <h2 id="apt-stack-title">Appointment Outcome Distribution</h2>
       <p class="psub" id="apt-stack-sub">% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · responds to Country filter</p>
       <div class="legend" id="aptStackLegend"></div>
-      <div class="cwrap h300"><canvas id="aptStackChart"></canvas></div>
+      <div id="aptStackContainer"></div>
     </div>
   </div>
 </div>
@@ -2038,88 +2038,120 @@ function drawAptLabel(ctx2d, txt, x, y, bg) {
   ctx2d.restore();
 }
 
-function freshAptCanvas() {
-  if (charts.aptStack) { charts.aptStack.destroy(); charts.aptStack = null; }
-  const wrap = document.getElementById('aptStackChart').parentNode;
-  document.getElementById('aptStackChart').remove();
-  const canvas = document.createElement('canvas');
-  canvas.id = 'aptStackChart';
-  wrap.appendChild(canvas);
-  return canvas.getContext('2d');
-}
-
 function renderAptStackChart() {
-  if (charts.aptStack) { charts.aptStack.destroy(); charts.aptStack = null; }
-  const ctx = document.getElementById('aptStackChart').getContext('2d');
-  const c   = selCountry;
-  const src = aptSelGroup;
+  // Destroy all existing chart instances (stored as array for multi-group)
+  if (Array.isArray(charts.aptStack)) {
+    charts.aptStack.forEach(ch => ch && ch.destroy());
+  } else if (charts.aptStack) {
+    charts.aptStack.destroy();
+  }
+  charts.aptStack = [];
+
+  const container = document.getElementById('aptStackContainer');
+  container.innerHTML = '';
+
+  const c       = selCountry;
   const periods = getAptPeriods();
-  const meta = APT_GROUP_META[src];
-  const rgb  = hexToRgb(meta.colour);
+  const groups  = APT_GROUP_KEYS.filter(g => aptCompareGroups.has(g));
+  if (!groups.length) return;
 
-  const points = periods.map(p => {
-    const m = getAptMetrics(src, c, aptPeriodType, p);
-    return (m && m.ob_appts>=3) ? m : null;
-  });
-  const labels = periods.filter((_,i) => points[i]!==null);
-  const pCan   = points.filter(Boolean).map(m => +(m.pct_cancelled  *100).toFixed(2));
-  const pRes   = points.filter(Boolean).map(m => +(m.pct_rescheduled*100).toFixed(2));
-  const pUnc   = points.filter(Boolean).map(m => +(m.pct_unchanged  *100).toFixed(2));
+  const multi  = groups.length > 1;
+  const chartH = multi ? 220 : 280;
+  const cols   = Math.min(groups.length, 3);
+  container.style.cssText = `display:grid;grid-template-columns:repeat(${cols},1fr);gap:8px`;
 
-  const showLabels = ctx =>
-    (aptPeriodType==='phase') || (ctx.dataIndex % Math.max(1, Math.floor(labels.length/5)) === 0);
-  const dlUnc = {display:showLabels, anchor:'center', align:'center', color:'#334155', font:{size:11,weight:'700'}, formatter:(v)=>v>=4?v.toFixed(0)+'%':null};
-  const dlRes = {display:showLabels, anchor:'center', align:'center', color:'#fff',    font:{size:11,weight:'700'}, formatter:(v)=>v>=4?v.toFixed(0)+'%':null};
-  const dlCan = {display:showLabels, anchor:'center', align:'center', color:'#fff',    font:{size:11,weight:'700'}, formatter:(v)=>v>=4?v.toFixed(0)+'%':null};
+  const shortName = g =>
+    g === 'RBA test group'     ? 'RBA'     :
+    g === '11 Labs test group' ? '11 Labs' :
+    g === 'AMP test group'     ? 'AMP'     : g;
 
-  charts.aptStack = new Chart(ctx, {
-    type: 'line',
-    plugins: [ChartDataLabels],
-    data: {
-      labels,
-      datasets: [
-        { label:'% Unchanged',   data:pUnc, fill:true,
-          backgroundColor:'rgba(148,163,184,0.5)', borderColor:'rgba(148,163,184,0.85)',
-          borderWidth:1.2, pointRadius:aptPeriodType==='phase'?4:1.5, tension:.35, order:3,
-          datalabels:dlUnc },
-        { label:'% Rescheduled', data:pRes, fill:true,
-          backgroundColor:`rgba(${rgb},0.55)`, borderColor:meta.colour,
-          borderWidth:1.8, pointRadius:aptPeriodType==='phase'?4:1.5, tension:.35, order:2,
-          datalabels:dlRes },
-        { label:'% Cancelled',   data:pCan, fill:true,
-          backgroundColor:'rgba(239,68,68,0.48)', borderColor:'rgba(239,68,68,0.85)',
-          borderWidth:1.2, pointRadius:aptPeriodType==='phase'?4:1.5, tension:.35, order:1,
-          datalabels:dlCan }
-      ]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{
-          title:t=>t[0]?t[0].label:'',
-          label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
-        }}
-      },
-      scales:{
-        x:{stacked:true, grid:{display:false}, ticks:{font:{size:11},maxRotation:45}},
-        y:{stacked:true, min:0, max:100,
-           ticks:{font:{size:11},callback:v=>v+'%'},
-           grid:{color:'rgba(128,128,128,.08)'}}
-      }
+  groups.forEach(src => {
+    const meta = APT_GROUP_META[src];
+    const rgb  = hexToRgb(meta.colour);
+
+    const points = periods.map(p => {
+      const m = getAptMetrics(src, c, aptPeriodType, p);
+      return (m && m.ob_appts >= 3) ? m : null;
+    });
+    const lbls = periods.filter((_, i) => points[i] !== null);
+    const pCan = points.filter(Boolean).map(m => +(m.pct_cancelled   * 100).toFixed(2));
+    const pRes = points.filter(Boolean).map(m => +(m.pct_rescheduled * 100).toFixed(2));
+    const pUnc = points.filter(Boolean).map(m => +(m.pct_unchanged   * 100).toFixed(2));
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:3px';
+
+    if (multi) {
+      const lbl = document.createElement('div');
+      lbl.style.cssText = `font-size:11px;font-weight:700;color:${meta.colour};padding:2px 0 0`;
+      lbl.textContent = shortName(src);
+      wrap.appendChild(lbl);
     }
+
+    const cwrap = document.createElement('div');
+    cwrap.style.cssText = `position:relative;height:${chartH}px`;
+    const canvas = document.createElement('canvas');
+    cwrap.appendChild(canvas);
+    wrap.appendChild(cwrap);
+    container.appendChild(wrap);
+
+    const fs = multi ? 9 : 11;
+    const pr = aptPeriodType === 'phase' ? 4 : 1.5;
+    const showLbl = ctx => (aptPeriodType === 'phase') || (ctx.dataIndex % Math.max(1, Math.floor(lbls.length / 5)) === 0);
+    const dl = color => ({ display: showLbl, anchor: 'center', align: 'center', color, font: { size: fs, weight: '700' }, formatter: v => v >= 4 ? v.toFixed(0) + '%' : null });
+
+    charts.aptStack.push(new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      plugins: [ChartDataLabels],
+      data: {
+        labels: lbls,
+        datasets: [
+          { label: '% Unchanged',   data: pUnc, fill: true,
+            backgroundColor: 'rgba(148,163,184,0.5)', borderColor: 'rgba(148,163,184,0.85)',
+            borderWidth: 1.2, pointRadius: pr, tension: .35, order: 3, datalabels: dl('#334155') },
+          { label: '% Rescheduled', data: pRes, fill: true,
+            backgroundColor: `rgba(${rgb},0.55)`, borderColor: meta.colour,
+            borderWidth: 1.8, pointRadius: pr, tension: .35, order: 2, datalabels: dl('#fff') },
+          { label: '% Cancelled',   data: pCan, fill: true,
+            backgroundColor: 'rgba(239,68,68,0.48)', borderColor: 'rgba(239,68,68,0.85)',
+            borderWidth: 1.2, pointRadius: pr, tension: .35, order: 1, datalabels: dl('#fff') }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: {
+            title: t => t[0] ? t[0].label : '',
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
+          }}
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { size: fs }, maxRotation: 45 } },
+          y: { stacked: true, min: 0, max: 100,
+               ticks: { font: { size: fs }, callback: v => v + '%' },
+               grid: { color: 'rgba(128,128,128,.08)' } }
+        }
+      }
+    }));
   });
 
+  // Rescheduled legend dot: single group color, or gradient across all selected group colors
+  const reschedBg = multi
+    ? `linear-gradient(90deg,${groups.map(g => APT_GROUP_META[g].colour).join(',')})`
+    : APT_GROUP_META[groups[0]].colour;
+
+  const names = groups.map(shortName);
   document.getElementById('apt-stack-title').textContent =
-    `Appointment Outcome — ${src}`;
+    multi ? `Appointment Outcome — ${names.join(' · ')}` : `Appointment Outcome — ${names[0]}`;
   document.getElementById('apt-stack-sub').textContent =
-    `% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · ${c==='ALL'?'All countries':c} · ${aptPeriodType==='week'?'By week':'By phase'}`;
+    `% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · ${c === 'ALL' ? 'All countries' : c} · ${aptPeriodType === 'week' ? 'By week' : 'By phase'}`;
   document.getElementById('aptStackLegend').innerHTML = [
-    {c:'rgba(239,68,68,0.85)',     n:'% Cancelled'},
-    {c:meta.colour,                n:'% Rescheduled'},
-    {c:'rgba(148,163,184,0.85)',   n:'% Unchanged'}
-  ].map(x=>`<div class="li"><div class="ld" style="background:${x.c}"></div>${x.n}</div>`).join('');
+    { c: 'rgba(239,68,68,0.85)',   n: '% Cancelled' },
+    { c: reschedBg,                n: '% Rescheduled' },
+    { c: 'rgba(148,163,184,0.85)', n: '% Unchanged' }
+  ].map(x => `<div class="li"><div class="ld" style="background:${x.c}"></div>${x.n}</div>`).join('');
 }
 
 function renderAptCompareChart() {
