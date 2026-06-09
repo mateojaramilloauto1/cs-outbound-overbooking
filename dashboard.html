@@ -2058,7 +2058,11 @@ function renderAptStackChart() {
   const multi  = groups.length > 1;
   const chartH = multi ? 220 : 280;
   const cols   = Math.min(groups.length, 3);
-  container.style.cssText = `display:grid;grid-template-columns:repeat(${cols},1fr);gap:8px`;
+  // Outer container: column flex so a footer label can sit below the chart grid
+  container.style.cssText = 'display:flex;flex-direction:column;gap:6px';
+  const chartsGrid = document.createElement('div');
+  chartsGrid.style.cssText = `display:grid;grid-template-columns:repeat(${cols},1fr);gap:8px`;
+  container.appendChild(chartsGrid);
 
   const shortName = g =>
     g === 'RBA test group'     ? 'RBA'     :
@@ -2093,7 +2097,7 @@ function renderAptStackChart() {
     const canvas = document.createElement('canvas');
     cwrap.appendChild(canvas);
     wrap.appendChild(cwrap);
-    container.appendChild(wrap);
+    chartsGrid.appendChild(wrap);
 
     const fs = multi ? 9 : 11;
     const pr = aptPeriodType === 'phase' ? 4 : 1.5;
@@ -2137,12 +2141,22 @@ function renderAptStackChart() {
     }));
   });
 
+  // Footer label below the grid tying all mini-charts together
+  const names = groups.map(shortName);
+  if (multi) {
+    const footer = document.createElement('div');
+    footer.style.cssText = 'text-align:center;font-size:11px;letter-spacing:0.01em;opacity:0.75';
+    footer.innerHTML = 'Appointment Outcome — ' + names.map((n, i) =>
+      `<span style="color:${APT_GROUP_META[groups[i]].colour};font-weight:600">${n}</span>`
+    ).join('<span style="opacity:0.45"> · </span>');
+    container.appendChild(footer);
+  }
+
   // Rescheduled legend dot: single group color, or gradient across all selected group colors
   const reschedBg = multi
     ? `linear-gradient(90deg,${groups.map(g => APT_GROUP_META[g].colour).join(',')})`
     : APT_GROUP_META[groups[0]].colour;
 
-  const names = groups.map(shortName);
   document.getElementById('apt-stack-title').textContent =
     multi ? `Appointment Outcome — ${names.join(' · ')}` : `Appointment Outcome — ${names[0]}`;
   document.getElementById('apt-stack-sub').textContent =
