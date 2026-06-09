@@ -223,17 +223,19 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <button class="fb save-default-btn" id="save-default-biz" onclick="saveDefaultView('biz')" title="Save current view, mode, metric and group selections as default">💾 Save default view</button>
     <span id="save-default-biz-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
   </div>
-  <div class="panel" style="margin-bottom:16px">
-    <h2 id="trend-chart-title">Weekly Trend</h2>
-    <p class="psub" id="trend-chart-sub">% metrics → left axis · Revenue/Cost → right axis (€) · Source: <a href="https://docs.google.com/spreadsheets/d/14E9gQqcoLoQwKTNm-Qi4naB851P0zsyebz6CgSpBT9k" target="_blank" style="color:#3B82F6;text-decoration:none">Leads KPIs sheet</a></p>
-    <div class="cwrap h300"><canvas id="trendChart"></canvas></div>
-    <div class="legend" id="trendLegend"></div>
-  </div>
-  <div class="panel">
-    <h2>Lead Volume by Group</h2>
-    <p class="psub">Lead volume per group over time</p>
-    <div class="legend" id="stackedLegend"></div>
-    <div class="cwrap h260"><canvas id="stackedAreaChart"></canvas></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">
+    <div class="panel">
+      <h2 id="trend-chart-title">Weekly Trend</h2>
+      <p class="psub" id="trend-chart-sub">% metrics → left axis · Revenue/Cost → right axis (€) · Source: <a href="https://docs.google.com/spreadsheets/d/14E9gQqcoLoQwKTNm-Qi4naB851P0zsyebz6CgSpBT9k" target="_blank" style="color:#3B82F6;text-decoration:none">Leads KPIs sheet</a></p>
+      <div class="cwrap h300"><canvas id="trendChart"></canvas></div>
+      <div class="legend" id="trendLegend"></div>
+    </div>
+    <div class="panel">
+      <h2>Lead Volume by Group</h2>
+      <p class="psub">Lead volume per group over time</p>
+      <div class="legend" id="stackedLegend"></div>
+      <div class="cwrap h300"><canvas id="stackedAreaChart"></canvas></div>
+    </div>
   </div>
 </div>
 
@@ -279,20 +281,22 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <span id="save-default-apt-msg" style="font-size:11px;color:#10B981;opacity:0;transition:opacity .4s;margin-left:6px">Saved!</span>
   </div>
 
-  <!-- Group comparison chart (mirrors Business KPIs trend chart) -->
-  <div class="panel" style="margin-bottom:16px">
-    <h2 id="apt-compare-title">Group Comparison</h2>
-    <p class="psub" id="apt-compare-sub">% metric per group over time · responds to Country filter</p>
-    <div class="cwrap h300"><canvas id="aptCompareChart"></canvas></div>
-    <div class="legend" id="aptCompareLegend"></div>
-  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">
+    <!-- Group comparison chart (mirrors Business KPIs trend chart) -->
+    <div class="panel">
+      <h2 id="apt-compare-title">Group Comparison</h2>
+      <p class="psub" id="apt-compare-sub">% metric per group over time · responds to Country filter</p>
+      <div class="cwrap h300"><canvas id="aptCompareChart"></canvas></div>
+      <div class="legend" id="aptCompareLegend"></div>
+    </div>
 
-  <!-- Outcome distribution chart (mirrors Business KPIs lead volume chart) -->
-  <div class="panel">
-    <h2 id="apt-stack-title">Appointment Outcome Distribution</h2>
-    <p class="psub" id="apt-stack-sub">% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · responds to Country filter</p>
-    <div class="legend" id="aptStackLegend"></div>
-    <div class="cwrap h260"><canvas id="aptStackChart"></canvas></div>
+    <!-- Outcome distribution chart (mirrors Business KPIs lead volume chart) -->
+    <div class="panel">
+      <h2 id="apt-stack-title">Appointment Outcome Distribution</h2>
+      <p class="psub" id="apt-stack-sub">% Cancelled · % Rescheduled · % Unchanged — stacked to 100% · responds to Country filter</p>
+      <div class="legend" id="aptStackLegend"></div>
+      <div class="cwrap h300"><canvas id="aptStackChart"></canvas></div>
+    </div>
   </div>
 </div>
 
@@ -2246,6 +2250,7 @@ function renderAptCompareChart() {
     const meta = APT_GROUP_META[src];
     return `<div class="li"><div class="ld" style="background:${meta.colour}"></div>${src}</div>`;
   }).join('');
+  renderAptGroupBtnStats();
 }
 
 function renderAptGroupBtnStats() {
