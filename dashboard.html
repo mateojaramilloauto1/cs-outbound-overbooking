@@ -228,8 +228,8 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <div class="panel">
       <h2 id="trend-chart-title">Weekly Trend</h2>
       <p class="psub" id="trend-chart-sub">% metrics → left axis · Revenue/Cost → right axis (€) · Source: <a href="https://docs.google.com/spreadsheets/d/14E9gQqcoLoQwKTNm-Qi4naB851P0zsyebz6CgSpBT9k" target="_blank" style="color:#3B82F6;text-decoration:none">Leads KPIs sheet</a></p>
-      <div class="cwrap h300"><canvas id="trendChart"></canvas></div>
       <div class="legend" id="trendLegend"></div>
+      <div class="cwrap h300"><canvas id="trendChart"></canvas></div>
     </div>
     <div class="panel">
       <h2>Lead Volume by Group</h2>
@@ -287,8 +287,8 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
   <div class="panel" style="margin-bottom:13px">
     <h2 id="apt-compare-title">Group Comparison</h2>
     <p class="psub" id="apt-compare-sub">% metric per group over time · responds to Country filter</p>
-    <div class="cwrap h300"><canvas id="aptCompareChart"></canvas></div>
     <div class="legend" id="aptCompareLegend"></div>
+    <div class="cwrap h300"><canvas id="aptCompareChart"></canvas></div>
   </div>
 
   <!-- Outcome distribution chart (full-width below) -->
@@ -1847,31 +1847,10 @@ function renderTrendCompare(){
         }
         col.forEach(p=>drawAptLabel(ctx2d,formatV(p.v),p.x,p.y,p.bg));
       }
-      // Top-of-chart name labels in subgroup mode
-      if(isSubMode){
-        chart.data.datasets.forEach((ds,di)=>{
-          const dmeta=chart.getDatasetMeta(di);
-          if(!dmeta||dmeta.hidden) return;
-          const bg=seriesColour[ds.label]||'#334155';
-          const isDashed=ds.borderDash&&ds.borderDash.length>0;
-          const y=chart.chartArea.top+13+di*18;
-          const x=chart.chartArea.left+10+di*140;
-          ctx2d.save();
-          ctx2d.beginPath();
-          if(isDashed) ctx2d.setLineDash([5,3]);
-          ctx2d.strokeStyle=bg; ctx2d.lineWidth=2;
-          ctx2d.moveTo(x,y); ctx2d.lineTo(x+22,y); ctx2d.stroke();
-          ctx2d.setLineDash([]);
-          ctx2d.font='bold 11px system-ui,sans-serif';
-          ctx2d.fillStyle=bg; ctx2d.textAlign='left'; ctx2d.textBaseline='middle';
-          ctx2d.fillText(ds.label,x+26,y);
-          ctx2d.restore();
-        });
-      }
     }
   };
 
-  const rightPad=isSubMode?130:90;
+  const rightPad=isSubMode?115:90;
   charts.trend=new Chart(ctx,{
     type:'line',plugins:[labelPlugin],
     data:{labels,datasets},
@@ -2889,27 +2868,11 @@ function renderAptCompareChart() {
           if (el) {
             const shortName = ds.label.replace(' test group','');
             ctx2d.save();
-            if (isSubMode) {
-              // Top-of-chart labels with line indicator
-              const isDashed = ds.borderDash && ds.borderDash.length > 0;
-              const di2 = di;
-              const yt = chart.chartArea.top + 13 + di2 * 18;
-              const xt = chart.chartArea.left + 10 + di2 * 130;
-              ctx2d.beginPath();
-              if (isDashed) ctx2d.setLineDash([5,3]);
-              ctx2d.strokeStyle = bg; ctx2d.lineWidth = 2;
-              ctx2d.moveTo(xt, yt); ctx2d.lineTo(xt+22, yt); ctx2d.stroke();
-              ctx2d.setLineDash([]);
-              ctx2d.font = 'bold 11px system-ui,sans-serif';
-              ctx2d.fillStyle = bg; ctx2d.textAlign = 'left'; ctx2d.textBaseline = 'middle';
-              ctx2d.fillText(shortName, xt + 26, yt);
-            } else {
-              ctx2d.font = 'bold 12px system-ui,sans-serif';
-              ctx2d.fillStyle = bg;
-              ctx2d.textAlign = 'left';
-              ctx2d.textBaseline = 'middle';
-              ctx2d.fillText(shortName, el.x + 10, el.y);
-            }
+            ctx2d.font = 'bold 12px system-ui,sans-serif';
+            ctx2d.fillStyle = bg;
+            ctx2d.textAlign = 'left';
+            ctx2d.textBaseline = 'middle';
+            ctx2d.fillText(shortName, el.x + 10, el.y);
             ctx2d.restore();
           }
         }
