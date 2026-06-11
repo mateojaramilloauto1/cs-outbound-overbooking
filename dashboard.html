@@ -1997,34 +1997,65 @@ function renderTrendPhase(){
 
 function renderStackedArea(wd){
   if(charts.stacked) charts.stacked.destroy();
-  if(trendView==='phase') renderStackedAreaPhase();
-  else renderStackedAreaWeekly(wd);
-  document.getElementById('stackedLegend').innerHTML=[
-    {c:'#3B82F6',n:'Agent'},{c:'#10B981',n:'RBA'},{c:'#F59E0B',n:'AMP'},{c:'#8B5CF6',n:'11 Labs'}
-  ].map(x=>`<div class="li"><div class="ld" style="background:${x.c}"></div>${x.n}</div>`).join('');
+  // Detect subgroup mode (same logic as renderTrendCompare)
+  const activeGroups=[...selGroups];
+  const _subMeta = activeGroups.length===1 ? TREND_SUBGROUP_MAP[activeGroups[0]] : null;
+  const isSubMode = !!_subMeta;
+  if(trendView==='phase') renderStackedAreaPhase(isSubMode?_subMeta:null);
+  else renderStackedAreaWeekly(wd, isSubMode?_subMeta:null);
+  const legendItems = isSubMode
+    ? _subMeta.subs.map((n,i)=>({c:_subMeta.colour,n,opacity:i===0?1:0.55}))
+    : [{c:'#3B82F6',n:'Agent'},{c:'#10B981',n:'RBA'},{c:'#F59E0B',n:'AMP'},{c:'#8B5CF6',n:'11 Labs'}];
+  document.getElementById('stackedLegend').innerHTML=legendItems.map(x=>
+    `<div class="li"><div class="ld" style="background:${x.c};opacity:${x.opacity??1}"></div>${x.n}</div>`
+  ).join('');
 }
 
-function renderStackedAreaWeekly(wd){
-  const labels=wd.map(d=>d.week);
-  const aD=wd.map(d=>d.a.l||0), rD=wd.map(d=>d.r.l||0),
-        mD=wd.map(d=>d.amp.l||0), eD=wd.map(d=>d.elabs.l||0);
-  const totals=aD.map((_,i)=>aD[i]+rD[i]+mD[i]+eD[i]);
-  const rawArrays=[aD,rD,mD,eD];
+function renderStackedAreaWeekly(wd, subMeta){
+  let labels, rawArrays, datasets;
+  if(subMeta){
+    // Subgroup mode: 2 series from LEADS_SUBS_RAW
+    const s0=aggSubgroupTrendWeekly(subMeta.subs[0]);
+    const s1=aggSubgroupTrendWeekly(subMeta.subs[1]);
+    // Align on common week labels
+    const allWeeks=[...new Set([...s0.map(d=>d.week),...s1.map(d=>d.week)])].sort();
+    const byWeek0=Object.fromEntries(s0.map(d=>[d.week,d.l||0]));
+    const byWeek1=Object.fromEntries(s1.map(d=>[d.week,d.l||0]));
+    labels=allWeeks;
+    const d0=allWeeks.map(w=>byWeek0[w]||0), d1=allWeeks.map(w=>byWeek1[w]||0);
+    rawArrays=[d0,d1];
+    const rgb=hexToRgb(subMeta.colour);
+    datasets=[
+      {label:subMeta.subs[0],data:d0,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.75)`,borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:subMeta.subs[1],data:d1,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.4)`, borderWidth:1.5,pointRadius:3,tension:.3}
+    ];
+  } else {
+    labels=wd.map(d=>d.week);
+    const aD=wd.map(d=>d.a.l||0), rD=wd.map(d=>d.r.l||0),
+          mD=wd.map(d=>d.amp.l||0), eD=wd.map(d=>d.elabs.l||0);
+    rawArrays=[aD,rD,mD,eD];
+    datasets=[
+      {label:'Agent',  data:aD,fill:true,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.75)', borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:'RBA',    data:rD,fill:true,borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.75)', borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:'AMP',    data:mD,fill:true,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.75)',  borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:'11 Labs',data:eD,fill:true,borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.75)', borderWidth:1.5,pointRadius:3,tension:.3}
+    ];
+  }
+  const nSeries=rawArrays.length;
+  const totals=rawArrays[0].map((_,i)=>rawArrays.reduce((s,a)=>s+(a[i]||0),0));
   const labPlugin={
     id:'saLabels',
     afterDatasetsDraw(chart){
       const c2=chart.ctx,ys=chart.scales.y;
-      const metas=[0,1,2,3].map(di=>chart.getDatasetMeta(di));
+      const metas=Array.from({length:nSeries},(_,di)=>chart.getDatasetMeta(di));
       const base0=ys.getPixelForValue(0);
       labels.forEach((_,i)=>{
         const tot=totals[i]; if(!tot) return;
-        // Total above topmost line (dataset 3 = 11 Labs)
-        const topPt=metas[3].data[i]; if(!topPt) return;
+        const topPt=metas[nSeries-1].data[i]; if(!topPt) return;
         c2.save();c2.font='bold 14px system-ui,sans-serif';c2.fillStyle='#1e293b';
         c2.textAlign='center';c2.textBaseline='bottom';
         c2.fillText(tot.toLocaleString(),topPt.x,topPt.y-6);c2.restore();
-        // % label centred in each band
-        for(let di=0;di<4;di++){
+        for(let di=0;di<nSeries;di++){
           const raw=rawArrays[di][i]; if(!raw) continue;
           const topY=metas[di].data[i]?.y; if(topY==null) continue;
           const botY=di===0?base0:(metas[di-1].data[i]?.y??base0);
@@ -2037,12 +2068,7 @@ function renderStackedAreaWeekly(wd){
   };
   charts.stacked=new Chart(document.getElementById('stackedAreaChart').getContext('2d'),{
     type:'line',plugins:[labPlugin],
-    data:{labels,datasets:[
-      {label:'Agent',  data:aD,fill:true,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.75)', borderWidth:1.5,pointRadius:3,tension:.3},
-      {label:'RBA',    data:rD,fill:true,borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.75)', borderWidth:1.5,pointRadius:3,tension:.3},
-      {label:'AMP',    data:mD,fill:true,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.75)',  borderWidth:1.5,pointRadius:3,tension:.3},
-      {label:'11 Labs',data:eD,fill:true,borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.75)', borderWidth:1.5,pointRadius:3,tension:.3}
-    ]},
+    data:{labels,datasets},
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
@@ -2062,27 +2088,46 @@ function renderStackedAreaWeekly(wd){
   });
 }
 
-function renderStackedAreaPhase(){
+function renderStackedAreaPhase(subMeta){
   const phKeys=['p1','p2','px','p31','p32','p33','p4'];
   const phLabels=phKeys.map(pk=>PHASE_LABELS[pk]);
-  const phData=phKeys.map(pk=>aggPhase(pk));
-  const aD=phData.map(d=>d.agent.l||0), rD=phData.map(d=>d.rba.l||0),
-        mD=phData.map(d=>d.amp.l||0),   eD=phData.map(d=>d.elabs.l||0);
-  const totals=aD.map((_,i)=>aD[i]+rD[i]+mD[i]+eD[i]);
-  const rawArrays=[aD,rD,mD,eD];
+  let rawArrays, datasets;
+  if(subMeta){
+    const d0=phKeys.map(pk=>aggSubgroupPhase(subMeta.subs[0],pk).l||0);
+    const d1=phKeys.map(pk=>aggSubgroupPhase(subMeta.subs[1],pk).l||0);
+    rawArrays=[d0,d1];
+    const rgb=hexToRgb(subMeta.colour);
+    datasets=[
+      {label:subMeta.subs[0],data:d0,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.75)`,borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:subMeta.subs[1],data:d1,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.4)`, borderWidth:1.5,pointRadius:4,tension:.3}
+    ];
+  } else {
+    const phData=phKeys.map(pk=>aggPhase(pk));
+    const aD=phData.map(d=>d.agent.l||0), rD=phData.map(d=>d.rba.l||0),
+          mD=phData.map(d=>d.amp.l||0),   eD=phData.map(d=>d.elabs.l||0);
+    rawArrays=[aD,rD,mD,eD];
+    datasets=[
+      {label:'Agent',  data:aD,fill:true,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.75)', borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:'RBA',    data:rD,fill:true,borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.75)', borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:'AMP',    data:mD,fill:true,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.75)',  borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:'11 Labs',data:eD,fill:true,borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.75)', borderWidth:1.5,pointRadius:4,tension:.3}
+    ];
+  }
+  const nSeries=rawArrays.length;
+  const totals=rawArrays[0].map((_,i)=>rawArrays.reduce((s,a)=>s+(a[i]||0),0));
   const labPlugin={
     id:'saPhaseLabels',
     afterDatasetsDraw(chart){
       const c2=chart.ctx,ys=chart.scales.y;
-      const metas=[0,1,2,3].map(di=>chart.getDatasetMeta(di));
+      const metas=Array.from({length:nSeries},(_,di)=>chart.getDatasetMeta(di));
       const base0=ys.getPixelForValue(0);
       phLabels.forEach((_,i)=>{
         const tot=totals[i]; if(!tot) return;
-        const topPt=metas[3].data[i]; if(!topPt) return;
+        const topPt=metas[nSeries-1].data[i]; if(!topPt) return;
         c2.save();c2.font='bold 14px system-ui,sans-serif';c2.fillStyle='#1e293b';
         c2.textAlign='center';c2.textBaseline='bottom';
         c2.fillText(tot.toLocaleString(),topPt.x,topPt.y-6);c2.restore();
-        for(let di=0;di<4;di++){
+        for(let di=0;di<nSeries;di++){
           const raw=rawArrays[di][i]; if(!raw) continue;
           const topY=metas[di].data[i]?.y; if(topY==null) continue;
           const botY=di===0?base0:(metas[di-1].data[i]?.y??base0);
@@ -2095,12 +2140,7 @@ function renderStackedAreaPhase(){
   };
   charts.stacked=new Chart(document.getElementById('stackedAreaChart').getContext('2d'),{
     type:'line',plugins:[labPlugin],
-    data:{labels:phLabels,datasets:[
-      {label:'Agent',  data:aD,fill:true,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.75)', borderWidth:1.5,pointRadius:4,tension:.3},
-      {label:'RBA',    data:rD,fill:true,borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.75)', borderWidth:1.5,pointRadius:4,tension:.3},
-      {label:'AMP',    data:mD,fill:true,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.75)',  borderWidth:1.5,pointRadius:4,tension:.3},
-      {label:'11 Labs',data:eD,fill:true,borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.75)', borderWidth:1.5,pointRadius:4,tension:.3}
-    ]},
+    data:{labels:phLabels,datasets},
     options:{
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
@@ -2430,7 +2470,9 @@ function toggleG(g){
       b.classList.remove('on');
     });
   }
-  renderTrend(aggTrendWeekly());
+  const _wd=aggTrendWeekly();
+  renderTrend(_wd);
+  renderStackedArea(_wd);
 }
 function setTrendMode(m){
   trendMode=m;
