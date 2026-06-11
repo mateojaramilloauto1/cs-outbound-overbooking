@@ -209,16 +209,16 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <button class="fb apt-metric active" data-tm="purchase"   onclick="setTrendCompareMetric('purchase')">% OB→Purchase</button>
     <button class="fb apt-metric"        data-tm="reschedule" onclick="setTrendCompareMetric('reschedule')">% OB→Reschedule</button>
     <button class="fb apt-metric"        data-tm="obshow"     onclick="setTrendCompareMetric('obshow')">% OB→Show</button>
-    <button class="fb apt-metric"        data-tm="revenue"    onclick="setTrendCompareMetric('revenue')">Revenue €</button>
-    <button class="fb apt-metric"        data-tm="cost"       onclick="setTrendCompareMetric('cost')">Cost €</button>
+    <button class="fb apt-metric"        data-tm="revenue"    onclick="setTrendCompareMetric('revenue')">Avg Sell Price €</button>
+    <button class="fb apt-metric"        data-tm="cost"       onclick="setTrendCompareMetric('cost')">Avg Buy Price €</button>
   </div>
   <div class="metric-row" id="trend-multi-metric-row" style="display:none">
     <label>Chart metrics</label>
     <button class="mt on" id="mt-purchase"   style="border-color:#3B82F6;color:#3B82F6" onclick="toggleM('purchase')">% OB→Purchase</button>
     <button class="mt"    id="mt-reschedule" style="border-color:#7C3AED;color:#7C3AED" onclick="toggleM('reschedule')">% OB→Reschedule</button>
     <button class="mt"    id="mt-obshow"     style="border-color:#DB2777;color:#DB2777" onclick="toggleM('obshow')">% OB→Show</button>
-    <button class="mt"    id="mt-revenue"    style="border-color:#059669;color:#059669" onclick="toggleM('revenue')">Revenue €</button>
-    <button class="mt"    id="mt-cost"       style="border-color:#EF4444;color:#EF4444" onclick="toggleM('cost')">Cost €</button>
+    <button class="mt"    id="mt-revenue"    style="border-color:#059669;color:#059669" onclick="toggleM('revenue')">Avg Sell Price €</button>
+    <button class="mt"    id="mt-cost"       style="border-color:#EF4444;color:#EF4444" onclick="toggleM('cost')">Avg Buy Price €</button>
   </div>
   <div class="trow" style="margin-bottom:0;margin-left:auto">
     <button class="fb save-default-btn" id="save-default-biz" onclick="saveDefaultView('biz')" title="Save current view, mode, metric and group selections as default">💾 Save default view</button>
@@ -1448,10 +1448,10 @@ const METRICS={
     afn:d=>d.pct_reschedule,rfn:d=>d.pct_reschedule,mfn:d=>d.pct_reschedule,efn:d=>d.pct_reschedule},
   obshow:    {label:'% OB→Show',       axis:'y',  aC:'#DB2777',rC:'#BE185D',mC:'#EA580C',eC:'#7C3AED',
     afn:d=>d.pct_show,      rfn:d=>d.pct_show,      mfn:d=>d.pct_show,      efn:d=>d.pct_show},
-  revenue:   {label:'Revenue €',       axis:'y2', aC:'#059669',rC:'#047857',mC:'#0891B2',eC:'#0369A1',
-    afn:d=>d.revenue!=null?d.revenue:null, rfn:d=>d.revenue!=null?d.revenue:null, mfn:d=>d.revenue!=null?d.revenue:null, efn:d=>d.revenue!=null?d.revenue:null},
-  cost:      {label:'Cost €',          axis:'y2', aC:'#EF4444',rC:'#DC2626',mC:'#D97706',eC:'#B45309',
-    afn:d=>d.cost!=null?d.cost:null,       rfn:d=>d.cost!=null?d.cost:null,       mfn:d=>d.cost!=null?d.cost:null,       efn:d=>d.cost!=null?d.cost:null},
+  revenue:   {label:'Avg Sell Price €', axis:'y2', aC:'#059669',rC:'#047857',mC:'#0891B2',eC:'#0369A1',
+    afn:d=>d.avg_sell_price??null, rfn:d=>d.avg_sell_price??null, mfn:d=>d.avg_sell_price??null, efn:d=>d.avg_sell_price??null},
+  cost:      {label:'Avg Buy Price €',  axis:'y2', aC:'#EF4444',rC:'#DC2626',mC:'#D97706',eC:'#B45309',
+    afn:d=>d.avg_buy_price??null,  rfn:d=>d.avg_buy_price??null,  mfn:d=>d.avg_buy_price??null,  efn:d=>d.avg_buy_price??null},
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1495,9 +1495,11 @@ function aggPhase(pk){
     obj.revenue+=(row[8]||0); obj.cost+=(row[9]||0);
   });
   const en=o=>({...o,
-    pct_purchase:  o.l>0?o.b/o.l:null,
-    pct_reschedule:o.l>0?o.rb/o.l:null,
-    pct_show:      o.l>0?o.sh/o.l:null
+    pct_purchase:   o.l>0?o.b/o.l:null,
+    pct_reschedule: o.l>0?o.rb/o.l:null,
+    pct_show:       o.l>0?o.sh/o.l:null,
+    avg_sell_price: o.b>0?o.revenue/o.b:null,
+    avg_buy_price:  o.b>0?o.cost/o.b:null
   });
   return{agent:en(a),rba:en(r),amp:en(m),elabs:en(e)};
 }
@@ -1518,9 +1520,11 @@ function aggWeekly(){
       obj.revenue+=(row[8]||0); obj.cost+=(row[9]||0);
     });
     const en=o=>({...o,
-      pct_purchase:  o.l>0?o.b/o.l:null,
-      pct_reschedule:o.l>0?o.rb/o.l:null,
-      pct_show:      o.l>0?o.sh/o.l:null
+      pct_purchase:   o.l>0?o.b/o.l:null,
+      pct_reschedule: o.l>0?o.rb/o.l:null,
+      pct_show:       o.l>0?o.sh/o.l:null,
+      avg_sell_price: o.b>0?o.revenue/o.b:null,
+      avg_buy_price:  o.b>0?o.cost/o.b:null
     });
     return{week:w,a:en(a),r:en(r),amp:en(m),elabs:en(e)};
   }).filter(d=>d.a.l>0||d.r.l>0||d.amp.l>0||d.elabs.l>0);
@@ -1557,9 +1561,11 @@ function aggSubgroupTrendWeekly(sourceName){
       o.revenue+=(row[8]||0);o.cost+=(row[9]||0);
     });
     return{week:w,...o,
-      pct_purchase:  o.l>0?o.b/o.l:null,
-      pct_reschedule:o.l>0?o.rb/o.l:null,
-      pct_show:      o.l>0?o.sh/o.l:null};
+      pct_purchase:   o.l>0?o.b/o.l:null,
+      pct_reschedule: o.l>0?o.rb/o.l:null,
+      pct_show:       o.l>0?o.sh/o.l:null,
+      avg_sell_price: o.b>0?o.revenue/o.b:null,
+      avg_buy_price:  o.b>0?o.cost/o.b:null};
   }).filter(d=>d.l>0);
   return _applyWeekWindow(wd);
 }
@@ -1575,9 +1581,11 @@ function aggSubgroupPhase(sourceName, phaseKey){
     o.revenue+=(row[8]||0);o.cost+=(row[9]||0);
   });
   return{...o,
-    pct_purchase:  o.l>0?o.b/o.l:null,
-    pct_reschedule:o.l>0?o.rb/o.l:null,
-    pct_show:      o.l>0?o.sh/o.l:null};
+    pct_purchase:   o.l>0?o.b/o.l:null,
+    pct_reschedule: o.l>0?o.rb/o.l:null,
+    pct_show:       o.l>0?o.sh/o.l:null,
+    avg_sell_price: o.b>0?o.revenue/o.b:null,
+    avg_buy_price:  o.b>0?o.cost/o.b:null};
 }
 function aggWindowedTrend(){
   const wd=aggTrendWeekly();
@@ -1596,9 +1604,11 @@ function aggWindowedTrend(){
     se.revenue+=d.elabs.revenue; se.cost+=d.elabs.cost;
   });
   const en=o=>({...o,
-    pct_purchase:  o.l>0?o.b/o.l:null,
-    pct_reschedule:o.l>0?o.rb/o.l:null,
-    pct_show:      o.l>0?o.sh/o.l:null
+    pct_purchase:   o.l>0?o.b/o.l:null,
+    pct_reschedule: o.l>0?o.rb/o.l:null,
+    pct_show:       o.l>0?o.sh/o.l:null,
+    avg_sell_price: o.b>0?o.revenue/o.b:null,
+    avg_buy_price:  o.b>0?o.cost/o.b:null
   });
   return{agent:en(sa),rba:en(sr),amp:en(sm),elabs:en(se)};
 }
@@ -1766,8 +1776,7 @@ function renderTrendCompare(){
         if(!labels) labels=phKeys.map(pk=>PHASE_LABELS[pk]);
         const data=phKeys.map(pk=>{
           const d=aggSubgroupPhase(src,pk);
-          const v=m.afn({pct_purchase:d.pct_purchase,pct_reschedule:d.pct_reschedule,pct_show:d.pct_show,
-                         l:d.l,revenue:d.revenue,cost:d.cost});
+          const v=m.afn(d);
           return d.l>0&&v!=null?conv(v):null;
         });
         datasets.push({label:src,data,borderColor:col,backgroundColor:`rgba(${rgb},${si===1?0.04:0.1})`,
@@ -1776,8 +1785,7 @@ function renderTrendCompare(){
         const wd=aggSubgroupTrendWeekly(src);
         if(!labels||wd.length>labels.length) labels=wd.map(d=>d.week);
         const data=wd.map(d=>{
-          const v=m.afn({pct_purchase:d.pct_purchase,pct_reschedule:d.pct_reschedule,pct_show:d.pct_show,
-                         l:d.l,revenue:d.revenue,cost:d.cost});
+          const v=m.afn(d);
           return d.l>0&&v!=null?conv(v):null;
         });
         datasets.push({label:src,data,borderColor:col,backgroundColor:`rgba(${rgb},${si===1?0.04:0.1})`,
