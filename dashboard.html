@@ -194,7 +194,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="13">Last 3 months</option>
         <option value="26">Last 6 months</option>
       </select>
-      <button class="tg" id="tv-excl-wk" onclick="toggleExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
+      <button class="tg active" id="tv-excl-wk" onclick="toggleExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
     </div>
     <div class="metric-row" style="margin-bottom:0">
       <label>Groups</label>
@@ -262,6 +262,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="13">Last 3 months</option>
         <option value="26">Last 6 months</option>
       </select>
+      <button class="tg" id="apt-excl-wk" onclick="toggleAptExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
     </div>
     <div class="metric-row" style="margin-bottom:0">
       <label>Groups</label>
@@ -1462,7 +1463,7 @@ let selGroups=new Set(['agent','rba','elabs']);
 let shareMode='#', trendView='weekly';
 let trendMode='compare', trendCompareMetric='purchase';
 let trendBreakdownGroup='agent', trendWeekWindow=8, acceptWeekWindow=0;
-let trendExcludeLastWeek=false;
+let trendExcludeLastWeek=true;  // Business KPIs: exclude last (incomplete) week by default
 const charts={};
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1838,25 +1839,24 @@ function renderTrendCompare(){
         }
         col.forEach(p=>drawAptLabel(ctx2d,formatV(p.v),p.x,p.y,p.bg));
       }
-      // Right-edge name labels in subgroup mode
+      // Top-of-chart name labels in subgroup mode
       if(isSubMode){
         chart.data.datasets.forEach((ds,di)=>{
           const dmeta=chart.getDatasetMeta(di);
           if(!dmeta||dmeta.hidden) return;
-          const lastI=(()=>{for(let i=ds.data.length-1;i>=0;i--){if(ds.data[i]!=null)return i;}return -1;})();
-          if(lastI<0) return;
-          const el=dmeta.data[lastI];
-          if(!el) return;
           const bg=seriesColour[ds.label]||'#334155';
           const isDashed=ds.borderDash&&ds.borderDash.length>0;
-          const name=ds.label;
-          const lineLabel=isDashed?`-- ${name}`:`— ${name}`;
+          const y=chart.chartArea.top+13+di*18;
+          const x=chart.chartArea.left+10+di*140;
           ctx2d.save();
+          ctx2d.beginPath();
+          if(isDashed) ctx2d.setLineDash([5,3]);
+          ctx2d.strokeStyle=bg; ctx2d.lineWidth=2;
+          ctx2d.moveTo(x,y); ctx2d.lineTo(x+22,y); ctx2d.stroke();
+          ctx2d.setLineDash([]);
           ctx2d.font='bold 11px system-ui,sans-serif';
-          ctx2d.fillStyle=bg;
-          ctx2d.textAlign='left';
-          ctx2d.textBaseline='middle';
-          ctx2d.fillText(lineLabel,el.x+10,el.y);
+          ctx2d.fillStyle=bg; ctx2d.textAlign='left'; ctx2d.textBaseline='middle';
+          ctx2d.fillText(ds.label,x+26,y);
           ctx2d.restore();
         });
       }
@@ -2519,7 +2519,8 @@ let aptSelGroup      = 'Agent';
 let aptMode          = 'compare';
 let aptCompareGroups = new Set(['Agent','RBA test group','11 Labs test group']);
 let aptCompareMetric = 'pct_rescheduled';
-let aptWeekWindow    = 8;  // default: last 8 weeks
+let aptWeekWindow        = 8;   // default: last 8 weeks
+let aptExcludeLastWeek   = false; // APT tab: show last week by default
 
 const APT_PHASES = ['Phase 1','Phase 2','Phase x','Phase 3','Phase 3.1','Phase 3.2','Phase 3.3','Phase 4','Phase 5'];
 const APT_WEEKS  = ['W48','W49','W50','W51','W52','W01','W02','W03','W04','W05',
@@ -2572,9 +2573,11 @@ function getAptMetrics(source, country, ptype, pname) {
 // ═══════════════════════════════════════════════════════════════════════════
 function getAptPeriods() {
   if (aptPeriodType !== 'week') return APT_PHASES;
-  return (aptWeekWindow > 0 && aptWeekWindow < APT_WEEKS.length)
+  let weeks = (aptWeekWindow > 0 && aptWeekWindow < APT_WEEKS.length)
     ? APT_WEEKS.slice(-aptWeekWindow)
     : APT_WEEKS;
+  if (aptExcludeLastWeek && weeks.length > 1) weeks = weeks.slice(0, -1);
+  return weeks;
 }
 
 function renderAptCards() {
@@ -2871,18 +2874,34 @@ function renderAptCompareChart() {
           if (!el) return;
           drawAptLabel(ctx2d, Math.round(v) + '%', el.x, el.y, bg);
         });
-        // Group name label at the last non-null point
+        // Group name label: at top of chart in subgroup mode, right-edge otherwise
         const lastI = (() => { for(let i=ds.data.length-1;i>=0;i--){if(ds.data[i]!=null)return i;} return -1; })();
         if (lastI >= 0) {
           const el = dmeta.data[lastI];
           if (el) {
             const shortName = ds.label.replace(' test group','');
             ctx2d.save();
-            ctx2d.font = 'bold 12px system-ui,sans-serif';
-            ctx2d.fillStyle = bg;
-            ctx2d.textAlign = 'left';
-            ctx2d.textBaseline = 'middle';
-            ctx2d.fillText(shortName, el.x + 10, el.y);
+            if (isSubMode) {
+              // Top-of-chart labels with line indicator
+              const isDashed = ds.borderDash && ds.borderDash.length > 0;
+              const di2 = di;
+              const yt = chart.chartArea.top + 13 + di2 * 18;
+              const xt = chart.chartArea.left + 10 + di2 * 130;
+              ctx2d.beginPath();
+              if (isDashed) ctx2d.setLineDash([5,3]);
+              ctx2d.strokeStyle = bg; ctx2d.lineWidth = 2;
+              ctx2d.moveTo(xt, yt); ctx2d.lineTo(xt+22, yt); ctx2d.stroke();
+              ctx2d.setLineDash([]);
+              ctx2d.font = 'bold 11px system-ui,sans-serif';
+              ctx2d.fillStyle = bg; ctx2d.textAlign = 'left'; ctx2d.textBaseline = 'middle';
+              ctx2d.fillText(shortName, xt + 26, yt);
+            } else {
+              ctx2d.font = 'bold 12px system-ui,sans-serif';
+              ctx2d.fillStyle = bg;
+              ctx2d.textAlign = 'left';
+              ctx2d.textBaseline = 'middle';
+              ctx2d.fillText(shortName, el.x + 10, el.y);
+            }
             ctx2d.restore();
           }
         }
@@ -3010,6 +3029,12 @@ function setAptPeriodType(t) {
 function setAptWeekWindow(n) {
   aptWeekWindow = n;
   const sel=document.getElementById('apt-ww-sel');if(sel)sel.value=n;
+  renderAptTab();
+}
+function toggleAptExclLastWeek(){
+  aptExcludeLastWeek=!aptExcludeLastWeek;
+  const btn=document.getElementById('apt-excl-wk');
+  if(btn) btn.classList.toggle('active',aptExcludeLastWeek);
   renderAptTab();
 }
 
