@@ -1838,10 +1838,32 @@ function renderTrendCompare(){
         }
         col.forEach(p=>drawAptLabel(ctx2d,formatV(p.v),p.x,p.y,p.bg));
       }
+      // Right-edge name labels in subgroup mode
+      if(isSubMode){
+        chart.data.datasets.forEach((ds,di)=>{
+          const dmeta=chart.getDatasetMeta(di);
+          if(!dmeta||dmeta.hidden) return;
+          const lastI=(()=>{for(let i=ds.data.length-1;i>=0;i--){if(ds.data[i]!=null)return i;}return -1;})();
+          if(lastI<0) return;
+          const el=dmeta.data[lastI];
+          if(!el) return;
+          const bg=seriesColour[ds.label]||'#334155';
+          const isDashed=ds.borderDash&&ds.borderDash.length>0;
+          const name=ds.label;
+          const lineLabel=isDashed?`-- ${name}`:`— ${name}`;
+          ctx2d.save();
+          ctx2d.font='bold 11px system-ui,sans-serif';
+          ctx2d.fillStyle=bg;
+          ctx2d.textAlign='left';
+          ctx2d.textBaseline='middle';
+          ctx2d.fillText(lineLabel,el.x+10,el.y);
+          ctx2d.restore();
+        });
+      }
     }
   };
 
-  const rightPad=isSubMode?120:90;
+  const rightPad=isSubMode?130:90;
   charts.trend=new Chart(ctx,{
     type:'line',plugins:[labelPlugin],
     data:{labels,datasets},
