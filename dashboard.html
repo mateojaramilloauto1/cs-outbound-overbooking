@@ -1531,6 +1531,1102 @@ const TREND_SUBGROUP_MAP={
   'agent': null
 };
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// METRICS CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
+const METRICS={
+  purchase:  {label:'% OB→Purchase',   axis:'y',  aC:'#3B82F6',rC:'#10B981',mC:'#F59E0B',eC:'#8B5CF6',
+    afn:d=>d.pct_purchase,  rfn:d=>d.pct_purchase,  mfn:d=>d.pct_purchase,  efn:d=>d.pct_purchase},
+  reschedule:{label:'% OB→Reschedule', axis:'y',  aC:'#7C3AED',rC:'#5B21B6',mC:'#B45309',eC:'#6D28D9',
+    afn:d=>d.pct_reschedule,rfn:d=>d.pct_reschedule,mfn:d=>d.pct_reschedule,efn:d=>d.pct_reschedule},
+  obshow:    {label:'% OB→Show',       axis:'y',  aC:'#DB2777',rC:'#BE185D',mC:'#EA580C',eC:'#7C3AED',
+    afn:d=>d.pct_show,      rfn:d=>d.pct_show,      mfn:d=>d.pct_show,      efn:d=>d.pct_show},
+  revenue:   {label:'Avg Sell Price €', axis:'y2', aC:'#059669',rC:'#047857',mC:'#0891B2',eC:'#0369A1',
+    afn:d=>d.avg_sell_price??null, rfn:d=>d.avg_sell_price??null, mfn:d=>d.avg_sell_price??null, efn:d=>d.avg_sell_price??null},
+  cost:      {label:'Avg Buy Price €',  axis:'y2', aC:'#EF4444',rC:'#DC2626',mC:'#D97706',eC:'#B45309',
+    afn:d=>d.avg_buy_price??null,  rfn:d=>d.avg_buy_price??null,  mfn:d=>d.avg_buy_price??null,  efn:d=>d.avg_buy_price??null},
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+let selCountry='DE', selPhase='total', selMainTab='appt', selSubTab='byphase';
+let selMetrics=new Set(['purchase']);
+let selGroups=new Set(['agent','rba','elabs']);
+let shareMode='#', trendView='weekly';
+let trendMode='compare', trendCompareMetric='purchase';
+let trendBreakdownGroup='agent', trendWeekWindow=8, acceptWeekWindow=0;
+let trendExcludeLastWeek=true;  // Business KPIs: exclude last (incomplete) week by default
+const charts={};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AGGREGATION
+// ═══════════════════════════════════════════════════════════════════════════
+function countries(){return selCountry==='ALL'?['DE','ES','FR','IT']:[selCountry];}
+
+// phase key → LEADS_RAW period_name mapping
+const PK_TO_NAME={p1:'Phase 1',p2:'Phase 2',px:'Phase x',p3:'Phase 3',
+  p31:'Phase 3.1',p32:'Phase 3.2',p33:'Phase 3.3',p4:'Phase 4'};
+// leaf phases for 'total' (avoids double-counting Phase 3 rollup)
+const LEAF_PHASES=new Set(['Phase 1','Phase 2','Phase x','Phase 3.1','Phase 3.2','Phase 3.3','Phase 4','Phase 5']);
+
+function aggPhase(pk){
+  const a={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const r={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const m={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const e={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const cs=new Set(countries());
+  const targetName=pk==='total'?null:PK_TO_NAME[pk];
+  LEADS_RAW.forEach(row=>{
+    if(!cs.has(row[1])) return;
+    if(row[2]!=='phase') return;
+    const pname=row[3];
+    if(pk==='total'?!LEAF_PHASES.has(pname):(pname!==targetName)) return;
+    const obj=row[0]==='A'?a:row[0]==='R'?r:row[0]==='M'?m:row[0]==='E'?e:null;
+    if(!obj) return;
+    obj.l+=row[4]; obj.rb+=row[5]; obj.sh+=row[6]; obj.b+=row[7];
+    obj.revenue+=(row[8]||0); obj.cost+=(row[9]||0);
+  });
+  const en=o=>({...o,
+    pct_purchase:   o.l>0?o.b/o.l:null,
+    pct_reschedule: o.l>0?o.rb/o.l:null,
+    pct_show:       o.l>0?o.sh/o.l:null,
+    avg_sell_price: o.b>0?o.revenue/o.b:null,
+    avg_buy_price:  o.b>0?o.cost/o.b:null
+  });
+  return{agent:en(a),rba:en(r),amp:en(m),elabs:en(e)};
+}
+
+function aggWeekly(){
+  const cs=new Set(countries());
+  return WEEKS.map(w=>{
+    const a={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+    const r={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+    const m={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+    const e={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+    LEADS_RAW.forEach(row=>{
+      if(!cs.has(row[1])) return;
+      if(row[2]!=='week'||row[3]!==w) return;
+      const obj=row[0]==='A'?a:row[0]==='R'?r:row[0]==='M'?m:row[0]==='E'?e:null;
+      if(!obj) return;
+      obj.l+=row[4]; obj.rb+=row[5]; obj.sh+=row[6]; obj.b+=row[7];
+      obj.revenue+=(row[8]||0); obj.cost+=(row[9]||0);
+    });
+    const en=o=>({...o,
+      pct_purchase:   o.l>0?o.b/o.l:null,
+      pct_reschedule: o.l>0?o.rb/o.l:null,
+      pct_show:       o.l>0?o.sh/o.l:null,
+      avg_sell_price: o.b>0?o.revenue/o.b:null,
+      avg_buy_price:  o.b>0?o.cost/o.b:null
+    });
+    return{week:w,a:en(a),r:en(r),amp:en(m),elabs:en(e)};
+  }).filter(d=>d.a.l>0||d.r.l>0||d.amp.l>0||d.elabs.l>0);
+}
+
+function getTodayISOWeek(){
+  const d=new Date();
+  const day=(d.getDay()+6)%7; // Mon=0..Sun=6
+  d.setDate(d.getDate()-day+3);
+  const jan4=new Date(d.getFullYear(),0,4);
+  return 1+Math.round((d-jan4)/604800000);
+}
+function _applyWeekWindow(wd){
+  if(trendWeekWindow<=0) return wd;
+  const todayWk=getTodayISOWeek();
+  const allowed=new Set();
+  for(let i=0;i<trendWeekWindow;i++){
+    let w=todayWk-i; if(w<=0) w+=52;
+    allowed.add('W'+String(w).padStart(2,'0'));
+  }
+  let r=wd.filter(d=>allowed.has(d.week));
+  if(trendExcludeLastWeek && r.length>1) r=r.slice(0,-1);
+  return r;
+}
+function aggTrendWeekly(){ return _applyWeekWindow(aggWeekly()); }
+
+function aggSubgroupTrendWeekly(sourceName){
+  const cs=new Set(countries());
+  const wd=WEEKS.map(w=>{
+    const o={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+    LEADS_SUBS_RAW.forEach(row=>{
+      if(row[0]!==sourceName||!cs.has(row[1])||row[2]!=='week'||row[3]!==w) return;
+      o.l+=row[4];o.rb+=row[5];o.sh+=row[6];o.b+=row[7];
+      o.revenue+=(row[8]||0);o.cost+=(row[9]||0);
+    });
+    return{week:w,...o,
+      pct_purchase:   o.l>0?o.b/o.l:null,
+      pct_reschedule: o.l>0?o.rb/o.l:null,
+      pct_show:       o.l>0?o.sh/o.l:null,
+      avg_sell_price: o.b>0?o.revenue/o.b:null,
+      avg_buy_price:  o.b>0?o.cost/o.b:null};
+  }).filter(d=>d.l>0);
+  return _applyWeekWindow(wd);
+}
+function aggSubgroupPhase(sourceName, phaseKey){
+  const cs=new Set(countries());
+  const targetName=phaseKey==='total'?null:PK_TO_NAME[phaseKey];
+  const o={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  LEADS_SUBS_RAW.forEach(row=>{
+    if(row[0]!==sourceName||!cs.has(row[1])||row[2]!=='phase') return;
+    const pn=row[3];
+    if(phaseKey==='total'?!LEAF_PHASES.has(pn):(pn!==targetName)) return;
+    o.l+=row[4];o.rb+=row[5];o.sh+=row[6];o.b+=row[7];
+    o.revenue+=(row[8]||0);o.cost+=(row[9]||0);
+  });
+  return{...o,
+    pct_purchase:   o.l>0?o.b/o.l:null,
+    pct_reschedule: o.l>0?o.rb/o.l:null,
+    pct_show:       o.l>0?o.sh/o.l:null,
+    avg_sell_price: o.b>0?o.revenue/o.b:null,
+    avg_buy_price:  o.b>0?o.cost/o.b:null};
+}
+function aggWindowedTrend(){
+  const wd=aggTrendWeekly();
+  const sa={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const sr={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const sm={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  const se={l:0,rb:0,sh:0,b:0,revenue:0,cost:0};
+  wd.forEach(d=>{
+    sa.l+=d.a.l; sa.rb+=d.a.rb; sa.sh+=d.a.sh; sa.b+=d.a.b;
+    sa.revenue+=d.a.revenue; sa.cost+=d.a.cost;
+    sr.l+=d.r.l; sr.rb+=d.r.rb; sr.sh+=d.r.sh; sr.b+=d.r.b;
+    sr.revenue+=d.r.revenue; sr.cost+=d.r.cost;
+    sm.l+=d.amp.l; sm.rb+=d.amp.rb; sm.sh+=d.amp.sh; sm.b+=d.amp.b;
+    sm.revenue+=d.amp.revenue; sm.cost+=d.amp.cost;
+    se.l+=d.elabs.l; se.rb+=d.elabs.rb; se.sh+=d.elabs.sh; se.b+=d.elabs.b;
+    se.revenue+=d.elabs.revenue; se.cost+=d.elabs.cost;
+  });
+  const en=o=>({...o,
+    pct_purchase:   o.l>0?o.b/o.l:null,
+    pct_reschedule: o.l>0?o.rb/o.l:null,
+    pct_show:       o.l>0?o.sh/o.l:null,
+    avg_sell_price: o.b>0?o.revenue/o.b:null,
+    avg_buy_price:  o.b>0?o.cost/o.b:null
+  });
+  return{agent:en(sa),rba:en(sr),amp:en(sm),elabs:en(se)};
+}
+function aggAcceptWeekly(){
+  const wd=aggWeekly();
+  return acceptWeekWindow>0?wd.slice(-acceptWeekWindow):wd;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FORMATTERS
+// ═══════════════════════════════════════════════════════════════════════════
+const fp=(v,d=1)=>v==null||isNaN(v)?'—':(v*100).toFixed(d)+'%';
+const fn=v=>v==null||isNaN(v)?'—':Math.round(v).toLocaleString();
+const fc=v=>v==null||isNaN(v)||v===0?'—':'€'+Math.round(v).toLocaleString();
+const dc=v=>v>0?'dp':v<0?'dn':'';
+const ds=(v,fmt)=>{
+  if(v==null||isNaN(v)) return '—';
+  const s=v>=0?'+':'';
+  if(fmt==='pct') return `${s}${(v*100).toFixed(1)} pp`;
+  if(fmt==='ccy') return `${v>=0?'+':''}€${Math.abs(Math.round(v)).toLocaleString()}`;
+  return `${s}${fn(v)}`;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERS — WARNING
+// ═══════════════════════════════════════════════════════════════════════════
+function renderWarning(){
+  const el=document.getElementById('warning');
+  if(el){el.style.display='none';}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERS — APPOINTMENT OUTCOME
+// ═══════════════════════════════════════════════════════════════════════════
+function renderApptCards(t){
+  const{agent:a,rba:r,amp:m}=t;
+  const dr=r.obtp-a.obtp, dm=m.obtp-a.obtp;
+  const pl=PHASE_LABELS[selPhase];
+  document.getElementById('appt-cards').innerHTML=[
+    {l:`Agent OB→Purchase (${pl})`,v:fp(a.obtp),s:`${fn(a.b)} buys / ${fn(a.l)} leads`,cls:'ac'},
+    {l:`RBA OB→Purchase (${pl})`,v:fp(r.obtp),s:`${fn(r.b)} buys / ${fn(r.l)} leads`,cls:'rc'},
+    {l:`AMP OB→Purchase (${pl})`,v:m.l>0?fp(m.obtp):'No AMP data',s:m.l>0?`${fn(m.b)} buys / ${fn(m.l)} leads`:'',cls:'mc'},
+    {l:'RBA vs Agent',v:(dr>=0?'+':'')+(dr*100).toFixed(1)+' pp',s:'OB to Purchase diff',cls:'dc',vc:dr>=0?'pos':'neg'},
+    {l:'AMP vs Agent',v:m.l>0?(dm>=0?'+':'')+(dm*100).toFixed(1)+' pp':'—',s:'OB to Purchase diff',cls:'dc',vc:m.l>0?(dm>=0?'pos':'neg'):''}
+  ].map(c=>`<div class="card ${c.cls}"><div class="card-label">${c.l}</div><div class="card-value ${c.vc||''}">${c.v}</div><div class="card-sub">${c.s}</div></div>`).join('');
+}
+
+function trendLegendHTML(){
+  return [...selMetrics].flatMap(mk=>{
+    const m=METRICS[mk];
+    const items=[];
+    const inG=g=>trendMode==='compare'?selGroups.has(g):g===trendBreakdownGroup;
+    if(inG('agent')) items.push(`<div class="li"><div class="ld" style="background:${m.aC}"></div>Agent – ${m.label}</div>`);
+    if(inG('rba'))   items.push(`<div class="li"><div class="ld" style="background:${m.rC}"></div>RBA – ${m.label}</div>`);
+    if(m.mC && inG('amp'))   items.push(`<div class="li"><div class="ld" style="background:${m.mC}"></div>AMP – ${m.label}</div>`);
+    if(m.eC && inG('elabs')) items.push(`<div class="li"><div class="ld" style="background:${m.eC}"></div>11 Labs – ${m.label}</div>`);
+    return items;
+  }).join('');
+}
+function trendScales(datasets){
+  const hasPct=[...selMetrics].some(k=>METRICS[k].axis==='y');
+  const hasPrc=[...selMetrics].some(k=>METRICS[k].axis==='y2');
+  const s={x:{grid:{display:false},ticks:{font:{size:11},maxRotation:45}}};
+  if(hasPct){
+    const pctVals=(datasets||[]).filter(ds=>ds.yAxisID==='y').flatMap(ds=>ds.data.filter(v=>v!=null));
+    let yMin=0,yMax=100;
+    if(pctVals.length){
+      const lo=Math.min(...pctVals),hi=Math.max(...pctVals);
+      const pad=Math.max(0.3,(hi-lo)*0.1);
+      yMin=Math.max(0,Math.floor((lo-pad)*10)/10);
+      yMax=Math.min(100,Math.ceil((hi+pad)*10)/10);
+    }
+    s.y={position:'left',min:yMin,max:yMax,ticks:{font:{size:11},callback:v=>v+'%'},grid:{color:'rgba(128,128,128,.1)'}};
+  }
+  if(hasPrc) s.y2={position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:11},callback:v=>'€'+Math.round(v/1000)+'k'}};
+  return s;
+}
+
+function renderTrend(wd){
+  if(trendMode==='compare'){renderTrendCompare();return;}
+  if(charts.trend) charts.trend.destroy();
+  if(trendView==='phase') renderTrendPhase();
+  else renderTrendWeekly(wd);
+  document.getElementById('trendLegend').innerHTML=trendLegendHTML();
+  renderTrendGroupBtnStats();
+}
+
+function freshTrendCanvas(){
+  if(charts.trend){charts.trend.destroy();charts.trend=null;}
+  const wrap=document.getElementById('trendChart').parentNode;
+  document.getElementById('trendChart').remove();
+  const c=document.createElement('canvas');c.id='trendChart';
+  wrap.appendChild(c);return c.getContext('2d');
+}
+
+function renderTrendGroupBtnStats(){
+  const isCompare=trendMode==='compare';
+  const d=trendView==='phase'?aggPhase(selPhase):aggWindowedTrend();
+  const m=METRICS[trendCompareMetric];
+  const isPct=m.axis==='y';
+  const GRP_DATA={
+    agent:{data:d.agent, colour:'#3B82F6',label:'Agent',   fn:v=>m.afn(v)},
+    rba:  {data:d.rba,   colour:'#10B981',label:'RBA',     fn:v=>m.rfn(v)},
+    amp:  {data:d.amp,   colour:'#F59E0B',label:'AMP',     fn:v=>m.mfn?m.mfn(v):null},
+    elabs:{data:d.elabs, colour:'#8B5CF6',label:'11 Labs', fn:v=>m.efn?m.efn(v):null}
+  };
+  const refVal=GRP_DATA.agent.fn(d.agent);
+  ['agent','rba','amp','elabs'].forEach(g=>{
+    const btn=document.getElementById('mg-'+g);
+    if(!btn)return;
+    const gd=GRP_DATA[g];
+    if(!isCompare){
+      btn.classList.remove('stat-mode');
+      btn.textContent=gd.label;
+      return;
+    }
+    const val=gd.fn(gd.data);
+    btn.classList.add('stat-mode');
+    if(val==null||(g==='amp'&&gd.data.l===0)){
+      btn.innerHTML=`<span class="sbn">${gd.label}</span><span class="sbv">—</span>`;
+      return;
+    }
+    let valStr, diffHtml;
+    if(isPct){
+      const pct=val*100;
+      const rPct=refVal!=null?refVal*100:null;
+      const diff=(g!=='agent'&&rPct!==null)?pct-rPct:null;
+      valStr=pct.toFixed(1)+'%';
+      diffHtml=diff!==null
+        ?`<span class="sbd ${diff>0?'pos':'neg'}">${diff>=0?'+':''}${diff.toFixed(1)} pp vs Agent</span>`
+        :`<span class="sbd ref">reference</span>`;
+    } else {
+      valStr='€'+Math.round(val).toLocaleString();
+      const diff=(g!=='agent'&&refVal!=null)?val-refVal:null;
+      diffHtml=diff!==null
+        ?`<span class="sbd ${diff>0?'pos':'neg'}">${diff>=0?'+':''}€${Math.abs(Math.round(diff)).toLocaleString()} vs Agent</span>`
+        :`<span class="sbd ref">reference</span>`;
+    }
+    btn.innerHTML=`<span class="sbn">${gd.label}</span><span class="sbv">${valStr}</span>${diffHtml}<span class="sba">${fn(gd.data.l)} leads</span>`;
+  });
+}
+
+function renderTrendCompare(){
+  const ctx=freshTrendCanvas();
+  const m=METRICS[trendCompareMetric];
+  const isPct=m.axis==='y';
+  const conv=isPct?v=>v!=null?+(v*100).toFixed(2):null:v=>v!=null?Math.round(v):null;
+  const formatV=v=>isPct?v.toFixed(1)+'%':'€'+Math.round(v).toLocaleString();
+  let labels,datasets=[];
+  const GRP_COLORS={Agent:'#3B82F6',RBA:'#10B981',AMP:'#F59E0B','11 Labs':'#8B5CF6'};
+
+  // Subgroup mode: exactly 1 group selected and it has defined subgroups
+  const activeGroups=[...selGroups];
+  const _subMeta = activeGroups.length===1 ? TREND_SUBGROUP_MAP[activeGroups[0]] : null;
+  const isSubMode = !!_subMeta;
+
+  if(isSubMode){
+    // Two lines: solid for solo-AI subgroup, dashed for AI+Agent subgroup
+    const col=_subMeta.colour;
+    const rgb=hexToRgb(col);
+    _subMeta.subs.forEach((src,si)=>{
+      const dash=si===1?[5,3]:[];
+      if(trendView==='phase'){
+        const phKeys=['p1','p2','px','p31','p32','p33','p4'];
+        if(!labels) labels=phKeys.map(pk=>PHASE_LABELS[pk]);
+        const data=phKeys.map(pk=>{
+          const d=aggSubgroupPhase(src,pk);
+          const v=m.afn(d);
+          return d.l>0&&v!=null?conv(v):null;
+        });
+        datasets.push({label:src,data,borderColor:col,backgroundColor:`rgba(${rgb},${si===1?0.04:0.1})`,
+          borderWidth:3,borderDash:dash,pointRadius:5,tension:.3,fill:false,spanGaps:true});
+      } else {
+        const wd=aggSubgroupTrendWeekly(src);
+        if(!labels||wd.length>labels.length) labels=wd.map(d=>d.week);
+        const data=wd.map(d=>{
+          const v=m.afn(d);
+          return d.l>0&&v!=null?conv(v):null;
+        });
+        datasets.push({label:src,data,borderColor:col,backgroundColor:`rgba(${rgb},${si===1?0.04:0.1})`,
+          borderWidth:3,borderDash:dash,pointRadius:4,tension:.3,fill:false,spanGaps:true});
+      }
+    });
+    if(!labels) labels=[];
+  } else {
+    if(trendView==='phase'){
+      const phKeys=['p1','p2','px','p31','p32','p33','p4'];
+      labels=phKeys.map(pk=>PHASE_LABELS[pk]);
+      if(selGroups.has('agent')) datasets.push({label:'Agent',data:phKeys.map(pk=>{const d=aggPhase(pk);return conv(m.afn(d.agent));}),borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.1)',borderWidth:3,pointRadius:5,tension:.3,fill:false,spanGaps:true});
+      if(selGroups.has('rba'))   datasets.push({label:'RBA',  data:phKeys.map(pk=>{const d=aggPhase(pk);return conv(m.rfn(d.rba));}),  borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.1)', borderWidth:3,pointRadius:5,tension:.3,fill:false,spanGaps:true});
+      if(m.mfn&&selGroups.has('amp')) datasets.push({label:'AMP',data:phKeys.map(pk=>{const d=aggPhase(pk);const v=m.mfn(d.amp);return d.amp.l>0&&v!=null?conv(v):null;}),borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.1)',borderWidth:3,pointRadius:5,tension:.3,fill:false,spanGaps:true});
+      if(m.efn&&selGroups.has('elabs')) datasets.push({label:'11 Labs',data:phKeys.map(pk=>{const d=aggPhase(pk);const v=m.efn(d.elabs);return d.elabs.l>0&&v!=null?conv(v):null;}),borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.1)',borderWidth:3,pointRadius:5,tension:.3,fill:false,spanGaps:true});
+    } else {
+      const wd=aggTrendWeekly();
+      labels=wd.map(d=>d.week);
+      if(selGroups.has('agent')) datasets.push({label:'Agent',data:wd.map(d=>conv(m.afn(d.a))),  borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.1)', borderWidth:3,pointRadius:4,tension:.3,fill:false,spanGaps:true});
+      if(selGroups.has('rba'))   datasets.push({label:'RBA',  data:wd.map(d=>conv(m.rfn(d.r))),  borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.1)',  borderWidth:3,pointRadius:4,tension:.3,fill:false,spanGaps:true});
+      if(m.mfn&&selGroups.has('amp')) datasets.push({label:'AMP',data:wd.map(d=>d.amp.l>0?conv(m.mfn(d.amp)):null),borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.1)',borderWidth:3,pointRadius:4,tension:.3,fill:false,spanGaps:true});
+      if(m.efn&&selGroups.has('elabs')) datasets.push({label:'11 Labs',data:wd.map(d=>d.elabs.l>0?conv(m.efn(d.elabs)):null),borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.1)',borderWidth:3,pointRadius:4,tension:.3,fill:false,spanGaps:true});
+    }
+  }
+
+  const allVals=datasets.flatMap(ds=>ds.data.filter(v=>v!=null));
+  let yMin=0,yMax=isPct?100:undefined;
+  if(allVals.length){
+    const lo=Math.min(...allVals),hi=Math.max(...allVals);
+    const pad=isPct?Math.max(0.5,(hi-lo)*0.15):(hi-lo)*0.15+1;
+    if(isPct){yMin=Math.max(0,Math.floor((lo-pad)*10)/10);yMax=Math.min(100,Math.ceil((hi+pad)*10)/10);}
+    else{yMin=Math.max(0,lo-pad);yMax=hi+pad;}
+  }
+
+  const seriesColour=Object.fromEntries(datasets.map(ds=>[ds.label, isSubMode?_subMeta.colour:(GRP_COLORS[ds.label]||'#334155')]));
+  const pLen=labels.length;
+  const step=pLen<=8?1:pLen<=16?2:3;
+  const MIN_COL_GAP=22;
+  const labelPlugin={
+    id:'trendCompareLabels',
+    afterDatasetsDraw(chart){
+      const ctx2d=chart.ctx;
+      const nPoints=chart.data.labels.length;
+      for(let i=0;i<nPoints;i++){
+        if(i%step!==0&&i!==nPoints-1) continue;
+        const col=[];
+        chart.data.datasets.forEach((ds,di)=>{
+          const dmeta=chart.getDatasetMeta(di);
+          if(!dmeta||dmeta.hidden)return;
+          const v=ds.data[i];
+          if(v==null||isNaN(v))return;
+          const el=dmeta.data[i];if(!el)return;
+          col.push({v,x:el.x,y:el.y,bg:seriesColour[ds.label]||'#334155'});
+        });
+        if(!col.length)continue;
+        col.sort((a,b)=>a.y-b.y);
+        for(let j=1;j<col.length;j++){
+          if(col[j].y-col[j-1].y<MIN_COL_GAP) col[j].y=col[j-1].y+MIN_COL_GAP;
+        }
+        col.forEach(p=>drawAptLabel(ctx2d,formatV(p.v),p.x,p.y,p.bg));
+      }
+    }
+  };
+
+  const rightPad=isSubMode?115:90;
+  charts.trend=new Chart(ctx,{
+    type:'line',plugins:[labelPlugin],
+    data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      layout:{padding:{top:50,bottom:10,right:rightPad}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          title:t=>t[0]?t[0].label:'',
+          label:c=>{const v=c.parsed.y;return ` ${c.dataset.label}: ${v!=null?formatV(v):'—'}`;}
+        }}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:11},maxRotation:45}},
+        y:{min:yMin,...(yMax!==undefined?{max:yMax}:{}),ticks:{font:{size:11},callback:isPct?v=>v+'%':v=>'€'+Math.round(v/1000)+'k'},grid:{color:'rgba(128,128,128,.08)'}}
+      }
+    }
+  });
+
+  const _grpKeyName={agent:'Agent',rba:'RBA',amp:'AMP',elabs:'11 Labs'};
+  const grpName=activeGroups.length===1?(_grpKeyName[activeGroups[0]]||activeGroups[0]):'';
+  document.getElementById('trend-chart-title').textContent=isSubMode
+    ?`${grpName} Subgroups — ${m.label}`:'Weekly Trend';
+  document.getElementById('trendLegend').innerHTML=datasets.map((ds,si)=>{
+    const col=seriesColour[ds.label];
+    const ld=isSubMode&&si===1
+      ?`<div class="ld" style="background:transparent;border:2px dashed ${col};box-sizing:border-box"></div>`
+      :`<div class="ld" style="background:${col}"></div>`;
+    return `<div class="li">${ld}${ds.label}</div>`;
+  }).join('');
+  renderTrendGroupBtnStats();
+}
+
+function renderTrendWeekly(wd){
+  const labels=wd.map(d=>d.week);
+  const datasets=[];
+  selMetrics.forEach(mk=>{
+    const m=METRICS[mk];
+    const isPct=m.axis==='y';
+    const conv=isPct?v=>v!=null?+(v*100).toFixed(1):null:v=>v!=null?Math.round(v):null;
+    if(trendBreakdownGroup==='agent') datasets.push(
+      {label:`Agent – ${m.label}`,data:wd.map(d=>conv(m.afn(d.a))),
+       borderColor:m.aC,backgroundColor:m.aC+'18',borderWidth:2.5,pointRadius:3,
+       tension:.3,fill:false,yAxisID:m.axis,spanGaps:false,borderDash:[]}
+    );
+    if(trendBreakdownGroup==='rba') datasets.push(
+      {label:`RBA – ${m.label}`,data:wd.map(d=>conv(m.rfn(d.r))),
+       borderColor:m.rC,backgroundColor:m.rC+'18',borderWidth:2.5,pointRadius:3,
+       tension:.3,fill:false,yAxisID:m.axis,spanGaps:false,borderDash:[]}
+    );
+    if(trendBreakdownGroup==='amp' && m.mfn && isPct) datasets.push(
+      {label:`AMP – ${m.label}`,data:wd.map(d=>d.amp.l>0?conv(m.mfn(d.amp)):null),
+       borderColor:m.mC,backgroundColor:m.mC+'18',borderWidth:2,pointRadius:3,
+       tension:.3,fill:false,yAxisID:'y',spanGaps:false,borderDash:[]}
+    );
+    if(trendBreakdownGroup==='elabs' && m.efn) datasets.push(
+      {label:`11 Labs – ${m.label}`,data:wd.map(d=>d.elabs.l>0?conv(m.efn(d.elabs)):null),
+       borderColor:m.eC,backgroundColor:m.eC+'18',borderWidth:2,pointRadius:3,
+       tension:.3,fill:false,yAxisID:m.axis,spanGaps:false,borderDash:[]}
+    );
+  });
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{
+    type:'line',plugins:[ChartDataLabels],
+    data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>{
+          const v=c.parsed.y; if(v===null||v===undefined) return null;
+          return ` ${c.dataset.label}: ${c.dataset.yAxisID==='y2'?'€'+Math.round(v).toLocaleString():v.toFixed(1)+'%'}`;
+        }}},
+        datalabels:{
+          display:ctx=>ctx.dataIndex%4===0 && ctx.dataset.data[ctx.dataIndex]!=null,
+          anchor:'end',align:'top',padding:1,
+          font:{size:9,weight:'600'},
+          color:ctx=>ctx.dataset.borderColor,
+          formatter:(v,ctx)=>{
+            if(v==null) return null;
+            return ctx.dataset.yAxisID==='y2'?'€'+Math.round(v/1000)+'k':v.toFixed(1)+'%';
+          }
+        }
+      },
+      scales:trendScales(datasets)
+    }
+  });
+}
+
+function renderTrendPhase(){
+  const phKeys=['p1','p2','px','p31','p32','p33','p4'];
+  const phLabels=phKeys.map(pk=>PHASE_LABELS[pk]);
+  const datasets=[];
+  selMetrics.forEach(mk=>{
+    const m=METRICS[mk];
+    const isPct=m.axis==='y';
+    const conv=isPct?v=>v!=null?+(v*100).toFixed(2):null:v=>v!=null?Math.round(v):null;
+    if(trendBreakdownGroup==='agent') datasets.push(
+      {label:`Agent – ${m.label}`,
+       data:phKeys.map(pk=>{const d=aggPhase(pk);const v=conv(m.afn(d.agent));return v||null;}),
+       borderColor:m.aC,backgroundColor:m.aC+'18',borderWidth:2.5,
+       pointRadius:5,pointHoverRadius:7,tension:.3,fill:false,yAxisID:m.axis,spanGaps:false,borderDash:[]}
+    );
+    if(trendBreakdownGroup==='rba') datasets.push(
+      {label:`RBA – ${m.label}`,
+       data:phKeys.map(pk=>{const d=aggPhase(pk);const v=conv(m.rfn(d.rba));return v||null;}),
+       borderColor:m.rC,backgroundColor:m.rC+'18',borderWidth:2.5,
+       pointRadius:5,pointHoverRadius:7,tension:.3,fill:false,yAxisID:m.axis,spanGaps:false,borderDash:[]}
+    );
+    if(trendBreakdownGroup==='amp' && m.mfn && isPct) datasets.push(
+      {label:`AMP – ${m.label}`,
+       data:phKeys.map(pk=>{const d=aggPhase(pk);const v=m.mfn(d.amp);return d.amp.l>0&&v!=null?conv(v):null;}),
+       borderColor:m.mC,backgroundColor:m.mC+'18',borderWidth:2,
+       pointRadius:5,pointHoverRadius:7,tension:.3,fill:false,yAxisID:'y',spanGaps:false,borderDash:[]}
+    );
+    if(trendBreakdownGroup==='elabs' && m.efn) datasets.push(
+      {label:`11 Labs – ${m.label}`,
+       data:phKeys.map(pk=>{const d=aggPhase(pk);const v=conv(m.efn(d.elabs));return d.elabs.l>0&&v!=null?v:null;}),
+       borderColor:m.eC,backgroundColor:m.eC+'18',borderWidth:2,
+       pointRadius:5,pointHoverRadius:7,tension:.3,fill:false,yAxisID:m.axis,spanGaps:false,borderDash:[]}
+    );
+  });
+  charts.trend=new Chart(document.getElementById('trendChart').getContext('2d'),{
+    type:'line',plugins:[ChartDataLabels],
+    data:{labels:phLabels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>{
+          const v=c.parsed.y; if(v===null||v===undefined) return null;
+          return ` ${c.dataset.label}: ${c.dataset.yAxisID==='y2'?'€'+Math.round(v).toLocaleString():v.toFixed(1)+'%'}`;
+        }}},
+        datalabels:{
+          anchor:'end',align:'top',padding:2,
+          font:{size:9,weight:'600'},
+          color:ctx=>ctx.dataset.borderColor,
+          display:ctx=>ctx.dataset.data[ctx.dataIndex]!=null,
+          formatter:(v,ctx)=>v==null?null:ctx.dataset.yAxisID==='y2'?'€'+Math.round(v/1000)+'k':v.toFixed(1)+'%'
+        }
+      },
+      scales:trendScales(datasets)
+    }
+  });
+}
+
+function renderStackedArea(wd){
+  if(charts.stacked) charts.stacked.destroy();
+  const activeGroups=[...selGroups];
+  const _subMeta=activeGroups.length===1?TREND_SUBGROUP_MAP[activeGroups[0]]:null;
+  const isSubMode=!!_subMeta;
+  if(trendView==='phase') renderStackedAreaPhase(isSubMode?_subMeta:null);
+  else renderStackedAreaWeekly(wd,isSubMode?_subMeta:null);
+  const legendItems=isSubMode
+    ?_subMeta.subs.map((n,i)=>({c:_subMeta.colour,n,opacity:i===0?1:0.55}))
+    :[{c:'#3B82F6',n:'Agent'},{c:'#10B981',n:'RBA'},{c:'#F59E0B',n:'AMP'},{c:'#8B5CF6',n:'11 Labs'}];
+  document.getElementById('stackedLegend').innerHTML=legendItems.map(x=>
+    `<div class="li"><div class="ld" style="background:${x.c};opacity:${x.opacity??1}"></div>${x.n}</div>`
+  ).join('');
+}
+
+function renderStackedAreaWeekly(wd,subMeta){
+  let labels,rawArrays,datasets;
+  if(subMeta){
+    const s0=aggSubgroupTrendWeekly(subMeta.subs[0]);
+    const s1=aggSubgroupTrendWeekly(subMeta.subs[1]);
+    const allWeeks=[...new Set([...s0.map(d=>d.week),...s1.map(d=>d.week)])].sort();
+    const bw0=Object.fromEntries(s0.map(d=>[d.week,d.l||0]));
+    const bw1=Object.fromEntries(s1.map(d=>[d.week,d.l||0]));
+    labels=allWeeks;
+    const d0=allWeeks.map(w=>bw0[w]||0),d1=allWeeks.map(w=>bw1[w]||0);
+    rawArrays=[d0,d1];
+    const rgb=hexToRgb(subMeta.colour);
+    datasets=[
+      {label:subMeta.subs[0],data:d0,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.75)`,borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:subMeta.subs[1],data:d1,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.4)`, borderWidth:1.5,pointRadius:3,tension:.3}
+    ];
+  } else {
+    labels=wd.map(d=>d.week);
+    const aD=wd.map(d=>d.a.l||0),rD=wd.map(d=>d.r.l||0),
+          mD=wd.map(d=>d.amp.l||0),eD=wd.map(d=>d.elabs.l||0);
+    rawArrays=[aD,rD,mD,eD];
+    datasets=[
+      {label:'Agent',  data:aD,fill:true,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.75)', borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:'RBA',    data:rD,fill:true,borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.75)', borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:'AMP',    data:mD,fill:true,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.75)',  borderWidth:1.5,pointRadius:3,tension:.3},
+      {label:'11 Labs',data:eD,fill:true,borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.75)', borderWidth:1.5,pointRadius:3,tension:.3}
+    ];
+  }
+  const nSeries=rawArrays.length;
+  const totals=rawArrays[0].map((_,i)=>rawArrays.reduce((s,a)=>s+(a[i]||0),0));
+  const labPlugin={
+    id:'saLabels',
+    afterDatasetsDraw(chart){
+      const c2=chart.ctx,ys=chart.scales.y;
+      const metas=Array.from({length:nSeries},(_,di)=>chart.getDatasetMeta(di));
+      const base0=ys.getPixelForValue(0);
+      labels.forEach((_,i)=>{
+        const tot=totals[i]; if(!tot) return;
+        const topPt=metas[nSeries-1].data[i]; if(!topPt) return;
+        c2.save();c2.font='bold 14px system-ui,sans-serif';c2.fillStyle='#1e293b';
+        c2.textAlign='center';c2.textBaseline='bottom';
+        c2.fillText(tot.toLocaleString(),topPt.x,topPt.y-6);c2.restore();
+        for(let di=0;di<nSeries;di++){
+          const raw=rawArrays[di][i]; if(!raw) continue;
+          const topY=metas[di].data[i]?.y; if(topY==null) continue;
+          const botY=di===0?base0:(metas[di-1].data[i]?.y??base0);
+          c2.save();c2.font='bold 13px system-ui,sans-serif';c2.fillStyle='#fff';
+          c2.textAlign='center';c2.textBaseline='middle';
+          c2.fillText(Math.round(raw/tot*100)+'% ('+raw.toLocaleString()+')',topPt.x,(topY+botY)/2);c2.restore();
+        }
+      });
+    }
+  };
+  charts.stacked=new Chart(document.getElementById('stackedAreaChart').getContext('2d'),{
+    type:'line',plugins:[labPlugin],
+    data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      layout:{padding:{top:28}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          label:c=>` ${c.dataset.label}: ${c.raw>0?c.raw.toLocaleString():'—'} leads`,
+          footer:items=>`Total: ${totals[items[0]?.dataIndex||0].toLocaleString()}`
+        }}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:11},maxRotation:45}},
+        y:{stacked:true,min:0,grid:{color:'rgba(128,128,128,.08)'},ticks:{font:{size:11},callback:v=>v.toLocaleString()}}
+      }
+    }
+  });
+}
+
+function renderStackedAreaPhase(subMeta){
+  const phKeys=['p1','p2','px','p31','p32','p33','p4'];
+  const phLabels=phKeys.map(pk=>PHASE_LABELS[pk]);
+  let rawArrays,datasets;
+  if(subMeta){
+    const d0=phKeys.map(pk=>aggSubgroupPhase(subMeta.subs[0],pk).l||0);
+    const d1=phKeys.map(pk=>aggSubgroupPhase(subMeta.subs[1],pk).l||0);
+    rawArrays=[d0,d1];
+    const rgb=hexToRgb(subMeta.colour);
+    datasets=[
+      {label:subMeta.subs[0],data:d0,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.75)`,borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:subMeta.subs[1],data:d1,fill:true,borderColor:subMeta.colour,backgroundColor:`rgba(${rgb},0.4)`, borderWidth:1.5,pointRadius:4,tension:.3}
+    ];
+  } else {
+    const phData=phKeys.map(pk=>aggPhase(pk));
+    const aD=phData.map(d=>d.agent.l||0),rD=phData.map(d=>d.rba.l||0),
+          mD=phData.map(d=>d.amp.l||0), eD=phData.map(d=>d.elabs.l||0);
+    rawArrays=[aD,rD,mD,eD];
+    datasets=[
+      {label:'Agent',  data:aD,fill:true,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.75)', borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:'RBA',    data:rD,fill:true,borderColor:'#10B981',backgroundColor:'rgba(16,185,129,0.75)', borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:'AMP',    data:mD,fill:true,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,0.75)',  borderWidth:1.5,pointRadius:4,tension:.3},
+      {label:'11 Labs',data:eD,fill:true,borderColor:'#8B5CF6',backgroundColor:'rgba(139,92,246,0.75)', borderWidth:1.5,pointRadius:4,tension:.3}
+    ];
+  }
+  const nSeries=rawArrays.length;
+  const totals=rawArrays[0].map((_,i)=>rawArrays.reduce((s,a)=>s+(a[i]||0),0));
+  const labPlugin={
+    id:'saPhaseLabels',
+    afterDatasetsDraw(chart){
+      const c2=chart.ctx,ys=chart.scales.y;
+      const metas=Array.from({length:nSeries},(_,di)=>chart.getDatasetMeta(di));
+      const base0=ys.getPixelForValue(0);
+      phLabels.forEach((_,i)=>{
+        const tot=totals[i]; if(!tot) return;
+        const topPt=metas[nSeries-1].data[i]; if(!topPt) return;
+        c2.save();c2.font='bold 14px system-ui,sans-serif';c2.fillStyle='#1e293b';
+        c2.textAlign='center';c2.textBaseline='bottom';
+        c2.fillText(tot.toLocaleString(),topPt.x,topPt.y-6);c2.restore();
+        for(let di=0;di<nSeries;di++){
+          const raw=rawArrays[di][i]; if(!raw) continue;
+          const topY=metas[di].data[i]?.y; if(topY==null) continue;
+          const botY=di===0?base0:(metas[di-1].data[i]?.y??base0);
+          c2.save();c2.font='bold 13px system-ui,sans-serif';c2.fillStyle='#fff';
+          c2.textAlign='center';c2.textBaseline='middle';
+          c2.fillText(Math.round(raw/tot*100)+'% ('+raw.toLocaleString()+')',topPt.x,(topY+botY)/2);c2.restore();
+        }
+      });
+    }
+  };
+  charts.stacked=new Chart(document.getElementById('stackedAreaChart').getContext('2d'),{
+    type:'line',plugins:[labPlugin],
+    data:{labels:phLabels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      layout:{padding:{top:28}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          label:c=>` ${c.dataset.label}: ${c.raw>0?c.raw.toLocaleString():'—'} leads`,
+          footer:items=>`Total: ${totals[items[0]?.dataIndex||0].toLocaleString()}`
+        }}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:11},maxRotation:30}},
+        y:{stacked:true,min:0,grid:{color:'rgba(128,128,128,.08)'},ticks:{font:{size:11},callback:v=>v.toLocaleString()}}
+      }
+    }
+  });
+}
+
+function renderDonut(t,canvasId,legendId){
+  if(charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId]=new Chart(document.getElementById(canvasId).getContext('2d'),{
+    type:'doughnut',
+    plugins:[ChartDataLabels],
+    data:{labels:['Agent','RBA','AMP'],datasets:[{data:[t.agent.l,t.rba.l,t.amp.l],
+      backgroundColor:['#3B82F6','#10B981','#F59E0B'],borderWidth:2,borderColor:'#fff',hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>{
+          const tot=c.dataset.data.reduce((a,b)=>a+b,0);
+          return ` ${c.label}: ${c.parsed.toLocaleString()} (${tot>0?(c.parsed/tot*100).toFixed(1):'0'}%)`;
+        }}},
+        datalabels:{
+          anchor:'center',align:'center',
+          color:'#fff',
+          font:{size:11,weight:'700'},
+          formatter:(value,ctx)=>{
+            const tot=ctx.dataset.data.reduce((a,b)=>a+b,0);
+            if(!value||!tot) return null;
+            const pct=(value/tot*100).toFixed(1);
+            return parseFloat(pct)<6?null:`${pct}%`;
+          }
+        }
+      }
+    }
+  });
+  if(legendId){
+    const tot=t.agent.l+t.rba.l+t.amp.l;
+    document.getElementById(legendId).innerHTML=[
+      {c:'#3B82F6',n:'Agent',v:t.agent.l},
+      {c:'#10B981',n:'RBA',v:t.rba.l},
+      {c:'#F59E0B',n:'AMP',v:t.amp.l}
+    ].map(x=>`<div class="li"><div class="ld" style="background:${x.c}"></div>${x.n}: ${fn(x.v)} (${tot>0?(x.v/tot*100).toFixed(1):'0'}%)</div>`).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERS — CALL OUTCOME
+// ═══════════════════════════════════════════════════════════════════════════
+function renderCallCards(t){
+  const{agent:a,rba:r,amp:m}=t;
+  const pl=PHASE_LABELS[selPhase];
+  document.getElementById('call-cards').innerHTML=[
+    {l:`Agent Buy Rate (${pl})`,v:fp(a.buyRate),s:`Avg PPU: ${fc(a.avgPPU)}`,cls:'ac'},
+    {l:`RBA Buy Rate (${pl})`,v:fp(r.buyRate),s:`Avg PPU: ${fc(r.avgPPU)}`,cls:'rc'},
+    {l:`AMP Buy Rate (${pl})`,v:m.l>0?fp(m.buyRate):'No data',s:m.l>0?`Avg PPU: ${fc(m.avgPPU)}`:'',cls:'mc'},
+    {l:'Agent Buy Price',v:fc(a.buyPrice),s:`Sell: ${fc(a.sellPrice)}`,cls:'ac'},
+    {l:'RBA Buy Price',v:fc(r.buyPrice),s:`Sell: ${fc(r.sellPrice)}`,cls:'rc'}
+  ].map(c=>`<div class="card ${c.cls}"><div class="card-label">${c.l}</div><div class="card-value">${c.v}</div><div class="card-sub">${c.s}</div></div>`).join('');
+}
+
+function renderPriceChart(wd){
+  if(charts.price) charts.price.destroy();
+  const labels=wd.map(d=>d.week);
+  charts.price=new Chart(document.getElementById('priceChart').getContext('2d'),{
+    type:'line',data:{labels,datasets:[
+      {label:'Agent Buy Price',data:wd.map(d=>d.a.buyPrice?Math.round(d.a.buyPrice):null),
+       borderColor:'#EA580C',borderWidth:2,pointRadius:2,tension:.3,fill:false,spanGaps:false},
+      {label:'RBA Buy Price',data:wd.map(d=>d.r.buyPrice?Math.round(d.r.buyPrice):null),
+       borderColor:'#EA580C',borderWidth:2,pointRadius:2,tension:.3,fill:false,spanGaps:false,borderDash:[5,3]},
+      {label:'Agent Sell Price',data:wd.map(d=>d.a.sellPrice?Math.round(d.a.sellPrice):null),
+       borderColor:'#DC2626',borderWidth:2,pointRadius:2,tension:.3,fill:false,spanGaps:false},
+      {label:'RBA Sell Price',data:wd.map(d=>d.r.sellPrice?Math.round(d.r.sellPrice):null),
+       borderColor:'#DC2626',borderWidth:2,pointRadius:2,tension:.3,fill:false,spanGaps:false,borderDash:[5,3]},
+      {label:'Agent PPU',data:wd.map(d=>d.a.avgPPU?Math.round(d.a.avgPPU):null),
+       borderColor:'#0284C7',borderWidth:2,pointRadius:2,tension:.3,fill:false,spanGaps:false},
+      {label:'RBA PPU',data:wd.map(d=>d.r.avgPPU?Math.round(d.r.avgPPU):null),
+       borderColor:'#0284C7',borderWidth:2,pointRadius:2,tension:.3,fill:false,spanGaps:false,borderDash:[5,3]}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom',labels:{font:{size:12},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: €${Math.round(c.parsed.y).toLocaleString()}`}}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:11},maxRotation:45}},
+        y:{ticks:{font:{size:11},callback:v=>'€'+Math.round(v/1000)+'k'},grid:{color:'rgba(128,128,128,.08)'}}}
+    }
+  });
+}
+
+function renderBuyRateChart(){
+  if(charts.buyRate) charts.buyRate.destroy();
+  const phases=PK_ORDER.map(pk=>PHASE_LABELS[pk]);
+  const get=(pk,group)=>{const d=aggPhase(pk);return d[group].sh>0?+(d[group].buyRate*100).toFixed(1):0;};
+  charts.buyRate=new Chart(document.getElementById('buyRateChart').getContext('2d'),{
+    type:'bar',
+    data:{labels:phases,datasets:[
+      {label:'Agent',data:PK_ORDER.map(pk=>get(pk,'agent')),backgroundColor:'#3B82F644',borderColor:'#3B82F6',borderWidth:1.5},
+      {label:'RBA',  data:PK_ORDER.map(pk=>get(pk,'rba')),  backgroundColor:'#10B98144',borderColor:'#10B981',borderWidth:1.5},
+      {label:'AMP',  data:PK_ORDER.map(pk=>get(pk,'amp')),  backgroundColor:'#F59E0B44',borderColor:'#F59E0B',borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:12},boxWidth:12}}},
+      scales:{x:{ticks:{font:{size:11}}},y:{ticks:{font:{size:11},callback:v=>v+'%'},grid:{color:'rgba(128,128,128,.08)'}}}
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERS — CALL ACCEPTANCE
+// ═══════════════════════════════════════════════════════════════════════════
+function renderShareChart(wd){
+  if(charts.share) charts.share.destroy();
+  const labels=wd.map(d=>d.week);
+  let datasets;
+  if(shareMode==='#'){
+    datasets=[
+      {label:'Agent',data:wd.map(d=>d.a.l),backgroundColor:'#3B82F6bb'},
+      {label:'RBA',  data:wd.map(d=>d.r.l),backgroundColor:'#10B981bb'},
+      {label:'AMP',  data:wd.map(d=>d.amp.l),backgroundColor:'#F59E0Bbb'}
+    ];
+  } else {
+    datasets=[
+      {label:'Agent',data:wd.map(d=>{const t=d.a.l+d.r.l+d.amp.l;return t>0?+(d.a.l/t*100).toFixed(1):null}),backgroundColor:'#3B82F6bb'},
+      {label:'RBA',  data:wd.map(d=>{const t=d.a.l+d.r.l+d.amp.l;return t>0?+(d.r.l/t*100).toFixed(1):null}),backgroundColor:'#10B981bb'},
+      {label:'AMP',  data:wd.map(d=>{const t=d.a.l+d.r.l+d.amp.l;return t>0?+(d.amp.l/t*100).toFixed(1):null}),backgroundColor:'#F59E0Bbb'}
+    ];
+  }
+  charts.share=new Chart(document.getElementById('shareChart').getContext('2d'),{
+    type:'bar',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{
+        x:{stacked:true,grid:{display:false},ticks:{font:{size:11},maxRotation:45}},
+        y:{stacked:true,grid:{color:'rgba(128,128,128,.08)'},
+          ticks:{font:{size:11},callback:v=>shareMode==='%'?v+'%':v.toLocaleString()},
+          ...(shareMode==='%'?{max:100}:{})}
+      },
+      plugins:{
+        legend:{position:'bottom',labels:{font:{size:12},boxWidth:13}},
+        tooltip:{callbacks:{label:c=>{
+          const v=c.parsed.y;
+          return ` ${c.dataset.label}: ${shareMode==='%'?v.toFixed(1)+'%':v.toLocaleString()}`;
+        }}}
+      }
+    }
+  });
+}
+
+function renderAcceptInfo(t){
+  const tot=t.agent.l+t.rba.l+t.amp.l;
+  document.getElementById('accept-info').innerHTML=[
+    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9"><span style="color:#3B82F6;font-weight:600">Agent</span><span><strong>${fn(t.agent.l)}</strong> leads &nbsp;<span style="color:#94a3b8">${tot>0?(t.agent.l/tot*100).toFixed(1):'0'}%</span></span></div>`,
+    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9"><span style="color:#10B981;font-weight:600">RBA</span><span><strong>${fn(t.rba.l)}</strong> leads &nbsp;<span style="color:#94a3b8">${tot>0?(t.rba.l/tot*100).toFixed(1):'0'}%</span></span></div>`,
+    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9"><span style="color:#F59E0B;font-weight:600">AMP</span><span><strong>${fn(t.amp.l)}</strong> leads &nbsp;<span style="color:#94a3b8">${tot>0?(t.amp.l/tot*100).toFixed(1):'0'}%</span></span></div>`,
+    `<div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-weight:600">Total</span><span><strong>${fn(tot)}</strong> leads</span></div>`
+  ].join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERS — DATA TABLE
+// ═══════════════════════════════════════════════════════════════════════════
+function renderByPhase(){
+  const phData={};
+  PK_ORDER.forEach(pk=>{phData[pk]=aggPhase(pk);});
+  const kpis=[
+    {lbl:'# Leads',       fA:d=>fn(d.agent.l),fR:d=>fn(d.rba.l),fM:d=>fn(d.amp.l),fmt:'abs'},
+    {lbl:'# Rebooked',    fA:d=>fn(d.agent.rb),fR:d=>fn(d.rba.rb),fM:d=>fn(d.amp.rb),fmt:'abs'},
+    {lbl:'# Shows',       fA:d=>fn(d.agent.sh),fR:d=>fn(d.rba.sh),fM:d=>fn(d.amp.sh),fmt:'abs'},
+    {lbl:'# Buys',        fA:d=>fn(d.agent.b),fR:d=>fn(d.rba.b),fM:d=>fn(d.amp.b),fmt:'abs'},
+    {lbl:'% Rescheduled', fA:d=>fp(d.agent.reschedRate),fR:d=>fp(d.rba.reschedRate),fM:d=>fp(d.amp.reschedRate),fmt:'pct'},
+    {lbl:'% Show Rate',   fA:d=>fp(d.agent.showRate),fR:d=>fp(d.rba.showRate),fM:d=>fp(d.amp.showRate),fmt:'pct'},
+    {lbl:'% Buy Rate',    fA:d=>fp(d.agent.buyRate),fR:d=>fp(d.rba.buyRate),fM:d=>fp(d.amp.buyRate),fmt:'pct'},
+    {lbl:'★ % OB→Purchase',fA:d=>fp(d.agent.obtp),fR:d=>fp(d.rba.obtp),fM:d=>fp(d.amp.obtp),fmt:'pct',hl:true},
+    {lbl:'Buy Price/Unit', fA:d=>fc(d.agent.buyPrice),fR:d=>fc(d.rba.buyPrice),fM:d=>fc(d.amp.buyPrice),fmt:'ccy'},
+    {lbl:'Sell Price/Unit',fA:d=>fc(d.agent.sellPrice),fR:d=>fc(d.rba.sellPrice),fM:d=>fc(d.amp.sellPrice),fmt:'ccy'},
+    {lbl:'Average PPU',    fA:d=>fc(d.agent.avgPPU),fR:d=>fc(d.rba.avgPPU),fM:d=>fc(d.amp.avgPPU),fmt:'ccy'}
+  ];
+  const diffCell=(av,rv,fmt)=>{
+    const raw=rv-av;
+    if(!isFinite(raw)) return '<td>—</td>';
+    return `<td class="${dc(raw)}">${ds(raw,fmt)}</td>`;
+  };
+  const thCols=PK_ORDER.map(pk=>`<th>${PHASE_LABELS[pk]}</th>`).join('');
+  let rows='';
+  kpis.forEach(k=>{
+    rows+=`<tr class="group-head"><td colspan="${PK_ORDER.length+2}">${k.lbl}</td></tr>`;
+    rows+=`<tr class="${k.hl?'hl':''}"><td></td><td class="aval">Agent</td>`+PK_ORDER.map(pk=>`<td class="aval">${k.fA(phData[pk])}</td>`).join('')+'</tr>';
+    rows+=`<tr class="${k.hl?'hl':''}"><td></td><td class="rval">RBA</td>`+PK_ORDER.map(pk=>`<td class="rval">${k.fR(phData[pk])}</td>`).join('')+'</tr>';
+    rows+=`<tr class="${k.hl?'hl':''}"><td></td><td class="mval">AMP</td>`+PK_ORDER.map(pk=>`<td class="mval">${k.fM(phData[pk])}</td>`).join('')+'</tr>';
+    rows+=`<tr style="opacity:.75"><td></td><td style="font-style:italic;color:#94a3b8;font-size:10px">diff</td>`+
+      PK_ORDER.map(pk=>{
+        const d=phData[pk]; const fmt=k.fmt;
+        let av,rv;
+        if(fmt==='pct'){
+          if(k.lbl.includes('Resched')){av=d.agent.reschedRate;rv=d.rba.reschedRate;}
+          else if(k.lbl.includes('Show')){av=d.agent.showRate;rv=d.rba.showRate;}
+          else if(k.lbl.includes('Buy Rate')){av=d.agent.buyRate;rv=d.rba.buyRate;}
+          else{av=d.agent.obtp;rv=d.rba.obtp;}
+        } else if(fmt==='abs'){
+          if(k.lbl.includes('Lead')){av=d.agent.l;rv=d.rba.l;}
+          else if(k.lbl.includes('Rebook')){av=d.agent.rb;rv=d.rba.rb;}
+          else if(k.lbl.includes('Show')){av=d.agent.sh;rv=d.rba.sh;}
+          else{av=d.agent.b;rv=d.rba.b;}
+        } else {
+          if(k.lbl.includes('Avg')||k.lbl.includes('PPU')){av=d.agent.avgPPU;rv=d.rba.avgPPU;}
+          else if(k.lbl.includes('Sell')){av=d.agent.sellPrice;rv=d.rba.sellPrice;}
+          else{av=d.agent.buyPrice;rv=d.rba.buyPrice;}
+        }
+        return diffCell(av,rv,fmt);
+      }).join('')+'</tr>';
+  });
+  return`<table style="min-width:900px"><thead><tr><th></th><th>Group</th>${thCols}</tr></thead><tbody>${rows}</tbody></table>
+  <p class="ph-note">Total = Phase 1+2+x+3 (excludes Phase 4)</p>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+function render(){
+  if(selMainTab==='appt'){
+    const twd=aggTrendWeekly();
+    renderTrend(twd);
+    renderStackedArea(twd);
+  } else if(selMainTab==='call'){
+    renderAptTab();
+  }
+}
+
+function renderByWeek(){
+  const allWd=aggWeekly();
+
+  const kpis=[
+    {lbl:'# Leads',       fA:d=>fn(d.a.l),         fR:d=>fn(d.r.l),         fM:d=>fn(d.amp.l),
+     fD:d=>{const v=d.r.l-d.a.l;return `<span class="${dc(v)}">${ds(v,'abs')}</span>`;}},
+    {lbl:'# Rebooked',    fA:d=>fn(d.a.rb),         fR:d=>fn(d.r.rb),        fM:d=>fn(d.amp.rb),
+     fD:d=>{const v=d.r.rb-d.a.rb;return `<span class="${dc(v)}">${ds(v,'abs')}</span>`;}},
+    {lbl:'# Shows',       fA:d=>fn(d.a.sh),         fR:d=>fn(d.r.sh),        fM:d=>fn(d.amp.sh),
+     fD:d=>{const v=d.r.sh-d.a.sh;return `<span class="${dc(v)}">${ds(v,'abs')}</span>`;}},
+    {lbl:'# Buys',        fA:d=>fn(d.a.b),          fR:d=>fn(d.r.b),         fM:d=>fn(d.amp.b),
+     fD:d=>{const v=d.r.b-d.a.b;return `<span class="${dc(v)}">${ds(v,'abs')}</span>`;}},
+    {lbl:'% Resched',     fA:d=>fp(d.a.reschedRate),fR:d=>fp(d.r.reschedRate),fM:d=>fp(d.amp.reschedRate),
+     fD:d=>{const v=d.r.reschedRate-d.a.reschedRate;return `<span class="${dc(v)}">${ds(v,'pct')}</span>`;}},
+    {lbl:'% Show Rate',   fA:d=>fp(d.a.showRate),   fR:d=>fp(d.r.showRate),  fM:d=>fp(d.amp.showRate),
+     fD:d=>{const v=d.r.showRate-d.a.showRate;return `<span class="${dc(v)}">${ds(v,'pct')}</span>`;}},
+    {lbl:'% Buy Rate',    fA:d=>fp(d.a.buyRate),    fR:d=>fp(d.r.buyRate),   fM:d=>fp(d.amp.buyRate),
+     fD:d=>{const v=d.r.buyRate-d.a.buyRate;return `<span class="${dc(v)}">${ds(v,'pct')}</span>`;}},
+    {lbl:'★ OB→Pur',     fA:d=>fp(d.a.obtp),       fR:d=>fp(d.r.obtp),      fM:d=>fp(d.amp.obtp),hl:true,
+     fD:d=>{const v=d.r.obtp-d.a.obtp;return `<span class="${dc(v)}">${ds(v,'pct')}</span>`;}},
+    {lbl:'Buy Price',     fA:d=>fc(d.a.buyPrice),   fR:d=>fc(d.r.buyPrice),  fM:d=>'—',
+     fD:d=>{const v=d.r.buyPrice-d.a.buyPrice;return `<span class="${dc(v)}">${ds(v,'ccy')}</span>`;}},
+    {lbl:'Sell Price',    fA:d=>fc(d.a.sellPrice),  fR:d=>fc(d.r.sellPrice), fM:d=>'—',
+     fD:d=>{const v=d.r.sellPrice-d.a.sellPrice;return `<span class="${dc(v)}">${ds(v,'ccy')}</span>`;}},
+    {lbl:'Avg PPU',       fA:d=>fc(d.a.avgPPU),     fR:d=>fc(d.r.avgPPU),    fM:d=>'—',
+     fD:d=>{const v=d.r.avgPPU-d.a.avgPPU;return `<span class="${dc(v)}">${ds(v,'ccy')}</span>`;}}
+  ];
+  const thCols=allWd.map(d=>`<th>${d.week}</th>`).join('');
+  let rows='';
+  kpis.forEach(k=>{
+    rows+=`<tr class="group-head"><td colspan="${allWd.length+2}">${k.lbl}</td></tr>`;
+    rows+=`<tr class="${k.hl?'hl':''}"><td></td><td class="aval">Agent</td>`+allWd.map(d=>`<td class="aval">${k.fA(d)}</td>`).join('')+'</tr>';
+    rows+=`<tr class="${k.hl?'hl':''}"><td></td><td class="rval">RBA</td>`+allWd.map(d=>`<td class="rval">${k.fR(d)}</td>`).join('')+'</tr>';
+    rows+=`<tr class="${k.hl?'hl':''}"><td></td><td class="mval">AMP</td>`+allWd.map(d=>`<td class="mval">${k.fM(d)}</td>`).join('')+'</tr>';
+    rows+=`<tr style="opacity:.75"><td></td><td style="font-style:italic;color:#94a3b8;font-size:10px">diff</td>`+allWd.map(d=>`<td>${k.fD(d)}</td>`).join('')+'</tr>';
+  });
+  return`<table style="min-width:${allWd.length*52+120}px"><thead><tr><th></th><th>Group</th>${thCols}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderTableContent(t){
+  document.getElementById('tcontent').innerHTML=
+    selSubTab==='byphase'?renderByPhase():renderByWeek();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════
+function setC(c){
+  selCountry=c;
+  document.querySelectorAll('#country-row .fb').forEach(b=>{
+    b.classList.toggle('active', b.dataset.c===c);
+  });
+  render();
+}
+function setP(pk){
+  selPhase=pk;
+  document.querySelectorAll('.fb.ph').forEach(b=>b.classList.toggle('active',b.dataset.pk===pk));
+  render();
+}
+function setMainTab(tab){
+  selMainTab=tab;
+  document.querySelectorAll('.main-tab').forEach((b,i)=>{
+    const tabs=['appt','call','fyi'];
+    b.classList.toggle('active',tabs[i]===tab);
+  });
+  document.querySelectorAll('.tab-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  if(tab!=='fyi') render();
+}
+function toggleM(mk){
+  selMetrics=new Set([mk]);
+  document.querySelectorAll('#trend-multi-metric-row .mt').forEach(b=>{
+    b.classList.toggle('on',b.id.replace('mt-','')===mk);
+  });
+  renderTrend(aggTrendWeekly());
+}
+function toggleG(g){
+  if(trendMode==='compare'){
+    if(selGroups.has(g)){if(selGroups.size>1)selGroups.delete(g);}
+    else selGroups.add(g);
+    document.querySelectorAll('[id^="mg-"]').forEach(b=>{
+      b.classList.toggle('active',selGroups.has(b.id.replace('mg-','')));
+      b.classList.remove('on');
+    });
+  } else {
+    trendBreakdownGroup=g;
+    document.querySelectorAll('[id^="mg-"]').forEach(b=>{
+      b.classList.toggle('active',b.id.replace('mg-','')===g);
+      b.classList.remove('on');
+    });
+  }
+  const _wd=aggTrendWeekly();
+  renderTrend(_wd);
+  renderStackedArea(_wd);
+}
+function setTrendMode(m){
+  trendMode=m;
+  document.getElementById('trend-compare-metric-row').style.display=m==='compare'?'':'none';
+  document.getElementById('trend-multi-metric-row')  .style.display=m==='compare'?'none':'';
+  document.querySelectorAll('[id^="mg-"]').forEach(b=>{
+    const grp=b.id.replace('mg-','');
+    const sel=m==='compare'?selGroups.has(grp):grp===trendBreakdownGroup;
+    b.classList.toggle('active',sel);
+    b.classList.remove('on');
+  });
+  renderTrend(aggTrendWeekly());
+}
+function setTrendCompareMetric(mk){
+  trendCompareMetric=mk;
+  document.querySelectorAll('[data-tm]').forEach(b=>b.classList.toggle('active',b.dataset.tm===mk));
+  renderTrendCompare();
+}
+function setTrendWeekWindow(n){
+  trendWeekWindow=n;
+  const sel=document.getElementById('trend-ww-sel');if(sel)sel.value=n;
+  const wd=aggTrendWeekly();
+  renderTrend(wd);
+  renderStackedArea(wd);
+}
+function toggleExclLastWeek(){
+  trendExcludeLastWeek=!trendExcludeLastWeek;
+  const btn=document.getElementById('tv-excl-wk');
+  if(btn) btn.classList.toggle('active',trendExcludeLastWeek);
+  const wd=aggTrendWeekly();
+  renderTrend(wd);
+  renderStackedArea(wd);
+}
+function setShareMode(m){
+  shareMode=m;
+  document.getElementById('tg-n').classList.toggle('active',m==='#');
+  document.getElementById('tg-p').classList.toggle('active',m==='%');
+  renderShareChart(aggAcceptWeekly());
+}
+function setAcceptWeekWindow(n){
+  acceptWeekWindow=n;
+  const sel=document.getElementById('accept-ww-sel');if(sel)sel.value=n;
+  renderShareChart(aggAcceptWeekly());
+}
+function setSubTab(t){
+  selSubTab=t;
+  document.querySelectorAll('.sub-tab').forEach((b,i)=>b.classList.toggle('active',i===(t==='byphase'?0:1)));
+  renderTableContent(aggPhase(selPhase));
+}
+function setTrendView(v){
+  trendView=v;
+  document.getElementById('tv-weekly').classList.toggle('active',v==='weekly');
+  document.getElementById('tv-phase').classList.toggle('active',v==='phase');
+  document.getElementById('trend-week-range-row').style.display=v==='weekly'?'':'none';
+  const wd=aggTrendWeekly();
+  renderTrend(wd);
+  if(selMainTab==='appt') renderStackedArea(wd);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// APPOINTMENT KPI DATA
+// ═══════════════════════════════════════════════════════════════════════════
 // Columns: [source, country, period_type, period_name, ob_appts, cancelled, rescheduled, unchanged, pct_via_agents]
 var APPT_RAW=[
   ["Agent","DE","week","W04",571,210,337,24,null],
