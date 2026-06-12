@@ -208,7 +208,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <label>Metric</label>
     <button class="fb apt-metric active" data-tm="purchase"   onclick="setTrendCompareMetric('purchase')">% OB→Purchase</button>
     <button class="fb apt-metric"        data-tm="reschedule" onclick="setTrendCompareMetric('reschedule')">% OB→Reschedule</button>
-    <button class="fb apt-metric"        data-tm="obshow"     onclick="setTrendCompareMetric('obshow')">% OB→Show</button>
+    <button class="fb apt-metric"        data-tm="obshow"     onclick="setTrendCompareMetric('obshow')">% Show rate</button>
     <button class="fb apt-metric"        data-tm="revenue"    onclick="setTrendCompareMetric('revenue')">Avg Sell Price €</button>
     <button class="fb apt-metric"        data-tm="cost"       onclick="setTrendCompareMetric('cost')">Avg Buy Price €</button>
   </div>
@@ -216,7 +216,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
     <label>Chart metrics</label>
     <button class="mt on" id="mt-purchase"   style="border-color:#3B82F6;color:#3B82F6" onclick="toggleM('purchase')">% OB→Purchase</button>
     <button class="mt"    id="mt-reschedule" style="border-color:#7C3AED;color:#7C3AED" onclick="toggleM('reschedule')">% OB→Reschedule</button>
-    <button class="mt"    id="mt-obshow"     style="border-color:#DB2777;color:#DB2777" onclick="toggleM('obshow')">% OB→Show</button>
+    <button class="mt"    id="mt-obshow"     style="border-color:#DB2777;color:#DB2777" onclick="toggleM('obshow')">% Show rate</button>
     <button class="mt"    id="mt-revenue"    style="border-color:#059669;color:#059669" onclick="toggleM('revenue')">Avg Sell Price €</button>
     <button class="mt"    id="mt-cost"       style="border-color:#EF4444;color:#EF4444" onclick="toggleM('cost')">Avg Buy Price €</button>
   </div>
@@ -1540,7 +1540,7 @@ const METRICS={
     afn:d=>d.pct_purchase,  rfn:d=>d.pct_purchase,  mfn:d=>d.pct_purchase,  efn:d=>d.pct_purchase},
   reschedule:{label:'% OB→Reschedule', axis:'y',  aC:'#7C3AED',rC:'#5B21B6',mC:'#B45309',eC:'#6D28D9',
     afn:d=>d.pct_reschedule,rfn:d=>d.pct_reschedule,mfn:d=>d.pct_reschedule,efn:d=>d.pct_reschedule},
-  obshow:    {label:'% OB→Show',       axis:'y',  aC:'#DB2777',rC:'#BE185D',mC:'#EA580C',eC:'#7C3AED',
+  obshow:    {label:'% Show rate',       axis:'y',  aC:'#DB2777',rC:'#BE185D',mC:'#EA580C',eC:'#7C3AED',
     afn:d=>d.pct_show,      rfn:d=>d.pct_show,      mfn:d=>d.pct_show,      efn:d=>d.pct_show},
   revenue:   {label:'Avg Sell Price €', axis:'y2', aC:'#059669',rC:'#047857',mC:'#0891B2',eC:'#0369A1',
     afn:d=>d.avg_sell_price??null, rfn:d=>d.avg_sell_price??null, mfn:d=>d.avg_sell_price??null, efn:d=>d.avg_sell_price??null},
@@ -1591,7 +1591,7 @@ function aggPhase(pk){
   const en=o=>({...o,
     pct_purchase:   o.l>0?o.b/o.l:null,
     pct_reschedule: o.l>0?o.rb/o.l:null,
-    pct_show:       o.l>0?o.sh/o.l:null,
+    pct_show:       o.rb>0?o.sh/o.rb:null,
     avg_sell_price: o.b>0?o.revenue/o.b:null,
     avg_buy_price:  o.b>0?o.cost/o.b:null
   });
@@ -1616,7 +1616,7 @@ function aggWeekly(){
     const en=o=>({...o,
       pct_purchase:   o.l>0?o.b/o.l:null,
       pct_reschedule: o.l>0?o.rb/o.l:null,
-      pct_show:       o.l>0?o.sh/o.l:null,
+      pct_show:       o.rb>0?o.sh/o.rb:null,
       avg_sell_price: o.b>0?o.revenue/o.b:null,
       avg_buy_price:  o.b>0?o.cost/o.b:null
     });
@@ -1657,7 +1657,7 @@ function aggSubgroupTrendWeekly(sourceName){
     return{week:w,...o,
       pct_purchase:   o.l>0?o.b/o.l:null,
       pct_reschedule: o.l>0?o.rb/o.l:null,
-      pct_show:       o.l>0?o.sh/o.l:null,
+      pct_show:       o.rb>0?o.sh/o.rb:null,
       avg_sell_price: o.b>0?o.revenue/o.b:null,
       avg_buy_price:  o.b>0?o.cost/o.b:null};
   }).filter(d=>d.l>0);
@@ -1677,7 +1677,7 @@ function aggSubgroupPhase(sourceName, phaseKey){
   return{...o,
     pct_purchase:   o.l>0?o.b/o.l:null,
     pct_reschedule: o.l>0?o.rb/o.l:null,
-    pct_show:       o.l>0?o.sh/o.l:null,
+    pct_show:       o.rb>0?o.sh/o.rb:null,
     avg_sell_price: o.b>0?o.revenue/o.b:null,
     avg_buy_price:  o.b>0?o.cost/o.b:null};
 }
@@ -1700,7 +1700,7 @@ function aggWindowedTrend(){
   const en=o=>({...o,
     pct_purchase:   o.l>0?o.b/o.l:null,
     pct_reschedule: o.l>0?o.rb/o.l:null,
-    pct_show:       o.l>0?o.sh/o.l:null,
+    pct_show:       o.rb>0?o.sh/o.rb:null,
     avg_sell_price: o.b>0?o.revenue/o.b:null,
     avg_buy_price:  o.b>0?o.cost/o.b:null
   });
