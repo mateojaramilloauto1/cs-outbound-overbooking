@@ -194,7 +194,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="13">Last 3 months</option>
         <option value="26">Last 6 months</option>
       </select>
-      <button class="tg" id="tv-excl-wk" onclick="toggleExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
+      <button class="tg" id="tv-excl-1w" onclick="setTrendExcludeN(1)" title="Exclude current (most recent) week">Excl. cur wk</button><button class="tg" id="tv-excl-2w" onclick="setTrendExcludeN(2)" title="Exclude current + last completed week">Excl. last 2W</button>
     </div>
     <div class="metric-row" style="margin-bottom:0">
       <label>Groups</label>
@@ -262,7 +262,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="13">Last 3 months</option>
         <option value="26">Last 6 months</option>
       </select>
-      <button class="tg" id="apt-excl-wk" onclick="toggleAptExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
+      <button class="tg" id="apt-excl-1w" onclick="setAptExcludeN(1)" title="Exclude current (most recent) week">Excl. cur wk</button><button class="tg" id="apt-excl-2w" onclick="setAptExcludeN(2)" title="Exclude current + last completed week">Excl. last 2W</button>
     </div>
     <div class="metric-row" style="margin-bottom:0">
       <label>Groups</label>
@@ -340,9 +340,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
 // ═══════════════════════════════════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════════════════════════════════
-const WEEKS=['W48','W49','W50','W51','W52','W01','W02','W03','W04','W05',
-             'W06','W07','W08','W09','W10','W11','W12','W13','W14','W15',
-             'W16','W17','W18','W19','W20','W21','W22','W23','W24'];
+const WEEKS=['W48','W49','W50','W51','W52','W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12','W13','W14','W15','W16','W17','W18','W19','W20','W21','W22','W23','W24','W25'];
 const PHASE_LABELS={total:'All',p1:'Phase 1',p2:'Phase 2',px:'Phase x',
   p3:'Phase 3',p31:'Phase 3.1',p32:'Phase 3.2',p33:'Phase 3.3',p4:'Phase 4'};
 const PK_ORDER=['total','p1','p2','px','p3','p31','p32','p33','p4'];
@@ -1404,7 +1402,7 @@ let selGroups=new Set(['agent','rba','elabs']);
 let shareMode='#', trendView='weekly';
 let trendMode='compare', trendCompareMetric='purchase';
 let trendBreakdownGroup='agent', trendWeekWindow=8, acceptWeekWindow=0;
-let trendExcludeLastWeek=false;  // Show all weeks including most recent by default
+let trendExcludeN=0;  // 0=show all, 1=excl current wk, 2=excl last 2 wks
 const charts={};
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1487,7 +1485,7 @@ function _applyWeekWindow(wd){
     allowed.add('W'+String(w).padStart(2,'0'));
   }
   let r=wd.filter(d=>allowed.has(d.week));
-  if(trendExcludeLastWeek && r.length>1) r=r.slice(0,-1);
+  if(trendExcludeN>0 && r.length>trendExcludeN) r=r.slice(0,-trendExcludeN);
   return r;
 }
 function aggTrendWeekly(){ return _applyWeekWindow(aggWeekly()); }
@@ -2436,10 +2434,10 @@ function setTrendWeekWindow(n){
   renderTrend(wd);
   renderStackedArea(wd);
 }
-function toggleExclLastWeek(){
-  trendExcludeLastWeek=!trendExcludeLastWeek;
-  const btn=document.getElementById('tv-excl-wk');
-  if(btn) btn.classList.toggle('active',trendExcludeLastWeek);
+function setTrendExcludeN(n){
+  trendExcludeN=(trendExcludeN===n)?0:n;
+  document.getElementById('tv-excl-1w').classList.toggle('active',trendExcludeN===1);
+  document.getElementById('tv-excl-2w').classList.toggle('active',trendExcludeN===2);
   const wd=aggTrendWeekly();
   renderTrend(wd);
   renderStackedArea(wd);
@@ -3850,12 +3848,10 @@ let aptMode          = 'compare';
 let aptCompareGroups = new Set(['Agent','RBA test group','11 Labs test group']);
 let aptCompareMetric = 'pct_rescheduled';
 let aptWeekWindow        = 8;   // default: last 8 weeks
-let aptExcludeLastWeek   = false; // APT tab: show last week by default
+let aptExcludeN=0;  // 0=show all, 1=excl current wk, 2=excl last 2 wks
 
 const APT_PHASES = ['Phase 1','Phase 2','Phase x','Phase 3','Phase 3.1','Phase 3.2','Phase 3.3','Phase 4','Phase 5'];
-const APT_WEEKS  = ['W48','W49','W50','W51','W52','W01','W02','W03','W04','W05',
-                    'W06','W07','W08','W09','W10','W11','W12','W13','W14','W15',
-                    'W16','W17','W18','W19','W20','W21','W22','W23','W24'];
+const APT_WEEKS=['W48','W49','W50','W51','W52','W01','W02','W03','W04','W05','W06','W07','W08','W09','W10','W11','W12','W13','W14','W15','W16','W17','W18','W19','W20','W21','W22','W23','W24','W25'];
 
 const APT_GROUP_META = {
   'Agent':            {colour:'#3B82F6', colourDim:'rgba(59,130,246,0.15)'},
@@ -3906,7 +3902,7 @@ function getAptPeriods() {
   let weeks = (aptWeekWindow > 0 && aptWeekWindow < APT_WEEKS.length)
     ? APT_WEEKS.slice(-aptWeekWindow)
     : APT_WEEKS;
-  if (aptExcludeLastWeek && weeks.length > 1) weeks = weeks.slice(0, -1);
+  if (aptExcludeN > 0 && weeks.length > aptExcludeN) weeks = weeks.slice(0, -aptExcludeN);
   return weeks;
 }
 
@@ -4345,10 +4341,10 @@ function setAptWeekWindow(n) {
   const sel=document.getElementById('apt-ww-sel');if(sel)sel.value=n;
   renderAptTab();
 }
-function toggleAptExclLastWeek(){
-  aptExcludeLastWeek=!aptExcludeLastWeek;
-  const btn=document.getElementById('apt-excl-wk');
-  if(btn) btn.classList.toggle('active',aptExcludeLastWeek);
+function setAptExcludeN(n){
+  aptExcludeN=(aptExcludeN===n)?0:n;
+  document.getElementById('apt-excl-1w').classList.toggle('active',aptExcludeN===1);
+  document.getElementById('apt-excl-2w').classList.toggle('active',aptExcludeN===2);
   renderAptTab();
 }
 
