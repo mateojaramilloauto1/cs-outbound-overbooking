@@ -194,7 +194,7 @@ td:nth-child(2){text-align:left;font-size:12px;color:#64748b;padding-left:2px;wh
         <option value="13">Last 3 months</option>
         <option value="26">Last 6 months</option>
       </select>
-      <button class="tg active" id="tv-excl-wk" onclick="toggleExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
+      <button class="tg" id="tv-excl-wk" onclick="toggleExclLastWeek()" title="Hide the most recent week (useful when current week data is incomplete)">Excl. last week</button>
     </div>
     <div class="metric-row" style="margin-bottom:0">
       <label>Groups</label>
@@ -1557,7 +1557,7 @@ let selGroups=new Set(['agent','rba','elabs']);
 let shareMode='#', trendView='weekly';
 let trendMode='compare', trendCompareMetric='purchase';
 let trendBreakdownGroup='agent', trendWeekWindow=8, acceptWeekWindow=0;
-let trendExcludeLastWeek=true;  // Business KPIs: exclude last (incomplete) week by default
+let trendExcludeLastWeek=false;  // Show all weeks including most recent by default
 const charts={};
 
 // ═══════════════════════════════════════════════════════════════════════════
