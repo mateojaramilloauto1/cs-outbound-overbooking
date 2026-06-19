@@ -1854,7 +1854,7 @@ function renderTrendGroupBtnStats(){
     const val=gd.fn(gd.data);
     btn.classList.add('stat-mode');
     if(val==null||(g==='amp'&&gd.data.l===0)){
-      btn.innerHTML=`<span class="sbn">${gd.label}</span><span class="sbv">—</span>`;
+      btn.innerHTML=`<span class="sbn">${gd.label}</span>`;
       return;
     }
     let valStr, diffHtml;
@@ -1862,7 +1862,7 @@ function renderTrendGroupBtnStats(){
       const pct=val*100;
       const rPct=refVal!=null?refVal*100:null;
       const diff=(g!=='agent'&&rPct!==null)?pct-rPct:null;
-      valStr=pct.toFixed(1)+'%';
+      valStr=null; // % value hidden — misleading without context
       diffHtml=diff!==null
         ?`<span class="sbd ${diff>0?'pos':'neg'}">${diff>=0?'+':''}${diff.toFixed(1)} pp vs Agent</span>`
         :`<span class="sbd ref">reference</span>`;
@@ -1873,7 +1873,7 @@ function renderTrendGroupBtnStats(){
         ?`<span class="sbd ${diff>0?'pos':'neg'}">${diff>=0?'+':''}€${Math.abs(Math.round(diff)).toLocaleString()} vs Agent</span>`
         :`<span class="sbd ref">reference</span>`;
     }
-    btn.innerHTML=`<span class="sbn">${gd.label}</span><span class="sbv">${valStr}</span>${diffHtml}<span class="sba">${fn(gd.data.l)} leads</span>`;
+    btn.innerHTML=`<span class="sbn">${gd.label}</span>${valStr?`<span class="sbv">${valStr}</span>`:''}${diffHtml}<span class="sba">${fn(gd.data.l)} leads</span>`;
   });
 }
 
@@ -4150,7 +4150,7 @@ function renderAptGroupBtnStats() {
     const m = getAptMetrics(src, c, aptPeriodType, aptBtnPeriods);
     b.classList.add('stat-mode');
     if (!m) {
-      b.innerHTML = `<span class="sbn">${src}</span><span class="sbv">—</span>`;
+      b.innerHTML = `<span class="sbn">${src}</span>`;
       return;
     }
     const val  = m[aptCompareMetric];
@@ -4158,7 +4158,7 @@ function renderAptGroupBtnStats() {
     const diffHtml = diff !== null
       ? `<span class="sbd ${diff>0?'pos':'neg'}">${diff>=0?'+':''}${(diff*100).toFixed(1)} pp vs ${refSrc}</span>`
       : `<span class="sbd ref">reference</span>`;
-    b.innerHTML = `<span class="sbn">${src}</span><span class="sbv">${(val*100).toFixed(1)}%</span>${diffHtml}<span class="sba">${fn(m.ob_appts)} appts</span>`;
+    b.innerHTML = `<span class="sbn">${src}</span>${diffHtml}<span class="sba">${fn(m.ob_appts)} appts</span>`;
   });
 }
 
